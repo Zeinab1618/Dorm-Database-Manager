@@ -19,6 +19,9 @@ st.title("Student Dorm Management")
 st.subheader("📋 View Any Table")
 cursor.execute("SHOW TABLES")
 tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
+# Ensure only valid tables are shown (case-sensitive)
+valid_tables = ["Building", "room", "student", "MaintenanceRequest", "Penalty", "Meals", "health_issues"]
+tables = [t for t in tables if t in valid_tables]
 selected_table = st.selectbox("Select a table to view:", tables)
 
 if st.button("Show Table"):
@@ -30,7 +33,7 @@ if st.button("Show Table"):
         st.info("No data found.")
 
 # --- TABLE-SPECIFIC OPERATIONS ---
-if selected_table.lower() == "student":
+if selected_table == "student":
     # --- ADD STUDENT ---
     with st.expander("➕ Add New Student"):
         with st.form("add_student_form"):
@@ -80,6 +83,10 @@ if selected_table.lower() == "student":
                                 cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
                                             (student_id, health_desc, prescription, guardian_contact))
                                 
+                                # Insert penalty record with 0 points
+                                cursor.execute("INSERT INTO Penalty (student_id, total_points) VALUES (%s, %s)",
+                                            (student_id, 0))
+                                
                                 # Update room occupancy
                                 cursor.execute("""
                                     UPDATE room 
@@ -90,7 +97,7 @@ if selected_table.lower() == "student":
                                 """, (room_id, room_id))
                                 
                                 conn.commit()
-                                st.success("Student, meal, and health information added. Room occupancy updated.")
+                                st.success("Student, meal, health, and penalty information added. Room occupancy updated.")
                             except mysql.connector.Error as e:
                                 conn.rollback()
                                 st.error(f"MySQL Error: {e}")
@@ -166,7 +173,7 @@ if selected_table.lower() == "student":
         else:
             st.error("Student not found.")
 
-elif selected_table.lower() == "maintenanceRequest":
+elif selected_table == "MaintenanceRequest":
     # --- ADD MAINTENANCE REQUEST ---
     with st.expander("➕ Add Maintenance Request"):
         with st.form("add_maintenance_form"):
@@ -186,6 +193,31 @@ elif selected_table.lower() == "maintenanceRequest":
                     conn.rollback()
                     st.error(f"MySQL Error: {e}")
 
+    # --- UPDATE MAINTENANCE REQUEST ---
+    st.subheader("✏️ Update Maintenance Request")
+    with st.form("update_maintenance_form"):
+        update_request_id = st.number_input("Request ID to Update", step=1)
+        new_status = st.selectbox("New Status", ["Pending", "In Progress", "Resolved"], key="update_status")
+        new_description = st.text_area("New Description", key="update_desc")
+        update_submitted = st.form_submit_button("Update Request")
+
+        if update_submitted:
+            cursor.execute("SELECT id FROM MaintenanceRequest WHERE id = %s", (update_request_id,))
+            if cursor.fetchone():
+                try:
+                    cursor.execute("""
+                        UPDATE MaintenanceRequest 
+                        SET statues=%s, description=%s 
+                        WHERE id=%s
+                    """, (new_status, new_description, update_request_id))
+                    conn.commit()
+                    st.success("Maintenance request updated.")
+                except mysql.connector.Error as e:
+                    conn.rollback()
+                    st.error(f"MySQL Error: {e}")
+            else:
+                st.error("Request ID not found.")
+
     # --- DELETE MAINTENANCE REQUEST ---
     st.subheader("🗑️ Delete Maintenance Request")
     del_request_id = st.number_input("Enter Request ID to Delete", step=1)
@@ -197,27 +229,20 @@ elif selected_table.lower() == "maintenanceRequest":
         else:
             st.error("Request ID not found.")
 
-elif selected_table.lower() == "penalty":
+elif selected_table == "Penalty":
     # --- UPDATE PENALTY ---
     st.subheader("✏️ Update Penalty Points")
     student_id = st.number_input("Student ID", step=1)
     points = st.number_input("Total Points", step=1, min_value=0)
     if st.button("Update Penalty"):
-        cursor.execute("REPLACE INTO Penalty (student_id, total_points) VALUES (%s, %s)",
-                      (student_id, points))
-        conn.commit()
-        st.success("Penalty points updated.")
-
-    # --- DELETE PENALTY ---
-    st.subheader("🗑️ Delete Penalty")
-    del_penalty_id = st.number_input("Enter Student ID to Delete Penalty", step=1)
-    if st.button("Delete Penalty"):
-        cursor.execute("DELETE FROM Penalty WHERE student_id = %s", (del_penalty_id,))
-        if cursor.rowcount > 0:
+        cursor.execute("SELECT id FROM student WHERE id = %s", (student_id,))
+        if cursor.fetchone():
+            cursor.execute("REPLACE INTO Penalty (student_id, total_points) VALUES (%s, %s)",
+                        (student_id, points))
             conn.commit()
-            st.warning("Penalty record deleted.")
+            st.success("Penalty points updated.")
         else:
-            st.error("Penalty record not found.")
+            st.error("Student ID not found.")
 
 # --- CLOSE DB ---
 cursor.close()
