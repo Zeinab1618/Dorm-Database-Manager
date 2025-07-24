@@ -2,7 +2,6 @@ import streamlit as st
 import mysql.connector
 import pandas as pd
 
-# Connect to MySQL using Streamlit secrets
 conn = mysql.connector.connect(
     host=st.secrets["mysql"]["host"],
     user=st.secrets["mysql"]["user"],
@@ -20,60 +19,27 @@ menu = st.sidebar.radio("Select a Page", ["Students", "Maintenance Requests", "A
 if menu == "Students":
     st.header("Student Information")
 
-    # Show all students
     cursor.execute("SELECT * FROM student")
     students = cursor.fetchall()
     df = pd.DataFrame(students)
     st.dataframe(df)
 
-    # ---------------- ADD NEW STUDENT ----------------
     with st.expander("Add New Student"):
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
         contact = st.text_input("Contact")
         room_id = st.number_input("Room ID", step=1)
-
-        weekday = st.selectbox("Meal Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-        meal_type = st.selectbox("Meal Type", ["A", "B"])
-
         if st.button("Insert Student"):
-            # Check room capacity
-            cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
-            room = cursor.fetchone()
+            cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
+            conn.commit()
+            st.success("Student added!")
 
-            if room:
-                if room['current_occupancy'] < room['capacity']:
-                    # Insert student
-                    cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
-                    # Update room occupancy
-                    cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
-                    # Insert meal
-                    cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
-                    conn.commit()
-                    st.success("✅ Student and meal added, room updated.")
-                else:
-                    st.warning("⚠️ Room is full. Cannot add student.")
-            else:
-                st.error("❌ Room ID not found.")
-
-    # ---------------- DELETE STUDENT ----------------
     del_id = st.number_input("Delete Student by ID", step=1)
     if st.button("Delete Student"):
-        # Get room ID before deleting
-        cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
-        result = cursor.fetchone()
-        if result:
-            room_id = result['room_id']
-            # Delete student
-            cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
-            # Decrease occupancy
-            cursor.execute("UPDATE room SET current_occupancy = current_occupancy - 1 WHERE id = %s", (room_id,))
-            conn.commit()
-            st.warning("Student deleted and room occupancy updated.")
-        else:
-            st.error("Student not found.")
+        cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
+        conn.commit()
+        st.warning("Student deleted!")
 
-    # ---------------- SEARCH & EDIT STUDENT ----------------
     search_id = st.number_input("Search Student by ID", step=1, key="search")
     if st.button("Search"):
         cursor.execute("SELECT * FROM student WHERE id = %s", (search_id,))
@@ -82,7 +48,7 @@ if menu == "Students":
             st.json(student)
 
             st.subheader("Change Meal")
-            weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+            weekday = st.selectbox("Weekday", ["Sunday","Monday","Tuesday","Wednesday","Thursday"])
             meal_type = st.selectbox("Meal Type", ["A", "B"])
             if st.button("Update Meal"):
                 cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (search_id, meal_type, weekday))
@@ -98,8 +64,7 @@ if menu == "Students":
                 guardian = st.text_input("Guardian Contact", health['guardian_contact'])
                 if st.button("Update Health Issue"):
                     cursor.execute("""
-                        UPDATE health_issues 
-                        SET description=%s, prescription=%s, guardian_contact=%s 
+                        UPDATE health_issues SET description=%s, prescription=%s, guardian_contact=%s
                         WHERE student_id=%s
                     """, (desc, prescription, guardian, search_id))
                     conn.commit()
@@ -116,7 +81,6 @@ if menu == "Students":
         else:
             st.error("Student not found")
 
-# ---------------- MAINTENANCE ----------------
 elif menu == "Maintenance Requests":
     st.header("Maintenance Requests")
 
@@ -131,14 +95,10 @@ elif menu == "Maintenance Requests":
         room_id = st.number_input("Room ID", step=1, key="maint")
         description = st.text_area("Description")
         if st.button("Save Maintenance Request"):
-            cursor.execute("""
-                REPLACE INTO MaintenanceRequest (id, statues, room_id, description) 
-                VALUES (%s, %s, %s, %s)
-            """, (mid, status, room_id, description))
+            cursor.execute("REPLACE INTO MaintenanceRequest (id, statues, room_id, description) VALUES (%s, %s, %s, %s)", (mid, status, room_id, description))
             conn.commit()
             st.success("Saved!")
 
-# ---------------- ALL TABLES ----------------
 elif menu == "All Tables":
     st.header("View Any Table")
 
