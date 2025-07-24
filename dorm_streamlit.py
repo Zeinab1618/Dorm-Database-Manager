@@ -26,6 +26,7 @@ if menu == "Students":
     df = pd.DataFrame(students)
     st.dataframe(df)
 
+    # ---------------- ADD NEW STUDENT ----------------
     with st.expander("Add New Student"):
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
@@ -36,42 +37,26 @@ if menu == "Students":
         meal_type = st.selectbox("Meal Type", ["A", "B"])
 
         if st.button("Insert Student"):
-            try:
-                # Start transaction
-                conn.start_transaction()
-                
-                # Check room capacity
-                cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
-                room = cursor.fetchone()
+            # Check room capacity
+            cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
+            room = cursor.fetchone()
 
-                if room:
-                    if room['current_occupancy'] < room['capacity']:
-                        # Insert student
-                        cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", 
-                                    (sid, name, contact, room_id))
-                        # Update room occupancy
-                        cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", 
-                                    (room_id,))
-                        # Insert meal
-                        cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", 
-                                    (sid, meal_type, weekday))
-                        
-                        conn.commit()
-                        st.success("✅ Student and meal added, room updated.")
-                    else:
-                        conn.rollback()
-                        st.warning("⚠️ Room is full. Cannot add student.")
+            if room:
+                if room['current_occupancy'] < room['capacity']:
+                    # Insert student
+                    cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
+                    # Update room occupancy
+                    cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
+                    # Insert meal
+                    cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
+                    conn.commit()
+                    st.success("✅ Student and meal added, room updated.")
                 else:
-                    conn.rollback()
-                    st.error("❌ Room ID not found.")
-                    
-            except mysql.connector.Error as err:
-                conn.rollback()
-                st.error(f"Database error: {err}")
-            except Exception as e:
-                conn.rollback()
-                st.error(f"Unexpected error: {e}")
+                    st.warning("⚠️ Room is full. Cannot add student.")
+            else:
+                st.error("❌ Room ID not found.")
 
+    # ---------------- DELETE STUDENT ----------------
     del_id = st.number_input("Delete Student by ID", step=1)
     if st.button("Delete Student"):
         # Get room ID before deleting
@@ -88,6 +73,7 @@ if menu == "Students":
         else:
             st.error("Student not found.")
 
+    # ---------------- SEARCH & EDIT STUDENT ----------------
     search_id = st.number_input("Search Student by ID", step=1, key="search")
     if st.button("Search"):
         cursor.execute("SELECT * FROM student WHERE id = %s", (search_id,))
@@ -130,6 +116,7 @@ if menu == "Students":
         else:
             st.error("Student not found")
 
+# ---------------- MAINTENANCE ----------------
 elif menu == "Maintenance Requests":
     st.header("Maintenance Requests")
 
@@ -151,6 +138,7 @@ elif menu == "Maintenance Requests":
             conn.commit()
             st.success("Saved!")
 
+# ---------------- ALL TABLES ----------------
 elif menu == "All Tables":
     st.header("View Any Table")
 
@@ -174,3 +162,4 @@ elif menu == "All Tables":
 
 cursor.close()
 conn.close()
+
