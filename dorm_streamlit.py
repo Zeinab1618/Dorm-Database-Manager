@@ -260,7 +260,7 @@ elif selected_table == "MaintenanceRequest":
 
             if submitted:
                 try:
-                   ;cursor.execute("INSERT INTO MaintenanceRequest (id, statues, room_id, description) VALUES (%s, %s, %s, %s)",
+                   cursor.execute("INSERT INTO MaintenanceRequest (id, statues, room_id, description) VALUES (%s, %s, %s, %s)",
                                   (request_id, status, room_id, description))
                     conn.commit()
                     st.success("Maintenance request added.")
