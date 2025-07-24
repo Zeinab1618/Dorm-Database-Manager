@@ -3,11 +3,12 @@ import mysql.connector
 import pandas as pd
 
 conn = mysql.connector.connect(
-    host="<your_host>",
-    user="<your_user>",
-    password="<your_password>",
-    database="<your_database>",
-    ssl_ca="<path_to_sca.pem>"
+    host=st.secrets["mysql"]["host"],
+    user=st.secrets["mysql"]["user"],
+    password=st.secrets["mysql"]["password"],
+    database=st.secrets["mysql"]["database"],
+    port=st.secrets["mysql"]["port"],
+    ssl_ca=st.secrets["mysql"]["ssl_ca"]
 )
 cursor = conn.cursor(dictionary=True)
 
