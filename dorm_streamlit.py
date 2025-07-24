@@ -170,24 +170,14 @@ if selected_table == "student":
 
                     if meal_submitted:
                         try:
-                            # Check if a meal record exists for this student and weekday
-                            cursor.execute("SELECT 1 FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday))
-                            meal_exists = cursor.fetchone()
-                            if meal_exists:
-                                # Update existing meal record
-                                cursor.execute("""
-                                    UPDATE Meals 
-                                    SET meal_type = %s 
-                                    WHERE student_id = %s AND weekday = %s
-                                """, (meal_type, search_id, weekday))
-                                conn.commit()
-                                st.success("Meal updated!")
-                            else:
-                                # Insert new meal record
-                                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                                              (search_id, meal_type, weekday))
-                                conn.commit()
-                                st.success("New meal record added!")
+                            # Debug: Show values being updated
+                            st.write(f"Updating meal for student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
+                            
+                            # Replace meal record
+                            cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                                          (search_id, meal_type, weekday))
+                            conn.commit()
+                            st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
                         except mysql.connector.Error as e:
                             conn.rollback()
                             st.error(f"Error updating meal: {e}")
