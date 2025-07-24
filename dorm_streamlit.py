@@ -18,10 +18,7 @@ st.title("Student Dorm Management")
 # --- VIEW TABLES ---
 st.subheader("📋 View Any Table")
 cursor.execute("SHOW TABLES")
-all_tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
-# Only include actual matching names (case-sensitive filtering)
-allowed_tables = ["student", "room", "Meals", "Building", "health_issues"]
-tables = [t for t in all_tables if t in allowed_tables]
+tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
 selected_table = st.selectbox("Select a table to view:", tables)
 
 if st.button("Show Table"):
@@ -34,54 +31,53 @@ if st.button("Show Table"):
 
 # --- ADD STUDENT ---
 st.subheader("➕ Add New Student")
-with st.expander("Click to expand and add a new student"):
-    with st.form("add_student_form"):
-        student_id = st.number_input("Student ID", step=1)
-        student_name = st.text_input("Name")
-        contact = st.text_input("Contact (11 digits)")
-        room_id = st.number_input("Room ID", step=1)
-        weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-        meal_choice = st.selectbox("Meal Choice", ["A", "B"])
-        submitted = st.form_submit_button("Add Student")
+with st.form("add_student_form"):
+    student_id = st.number_input("Student ID", step=1)
+    student_name = st.text_input("Name")
+    contact = st.text_input("Contact (11 digits)")
+    room_id = st.number_input("Room ID", step=1)
+    weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+    meal_choice = st.selectbox("Meal Choice", ["A", "B"])
+    submitted = st.form_submit_button("Add Student")
 
-        if submitted:
-            if len(contact) != 11 or not contact.isdigit():
-                st.error("Contact must be exactly 11 digits.")
-            else:
-                # Check room existence and capacity
-                cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
-                room = cursor.fetchone()
-                if room:
-                    if room["current_occupancy"] >= room["capacity"]:
-                        st.error("Room is full.")
-                    else:
-                        try:
-                            # Insert student
-                            cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
-                                        (student_id, student_name, contact, room_id))
-                            conn.commit()
-
-                            # Insert meal
-                            cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                                        (student_id, meal_choice, weekday))
-                            conn.commit()
-
-                            # Update occupancy using COUNT
-                            cursor.execute("""
-                                UPDATE room 
-                                SET current_occupancy = (
-                                    SELECT COUNT(*) FROM student WHERE room_id = %s
-                                )
-                                WHERE id = %s
-                            """, (room_id, room_id))
-                            conn.commit()
-
-                            st.success("Student and meal added. Room occupancy updated.")
-                        except mysql.connector.Error as e:
-                            conn.rollback()
-                            st.error(f"MySQL Error: {e}")
+    if submitted:
+        if len(contact) != 11 or not contact.isdigit():
+            st.error("Contact must be exactly 11 digits.")
+        else:
+            # Check room existence and capacity
+            cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
+            room = cursor.fetchone()
+            if room:
+                if room["current_occupancy"] >= room["capacity"]:
+                    st.error("Room is full.")
                 else:
-                    st.error("Room does not exist.")
+                    try:
+                        # Insert student
+                        cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
+                                       (student_id, student_name, contact, room_id))
+                        conn.commit()
+
+                        # Insert meal
+                        cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                                       (student_id, meal_choice, weekday))
+                        conn.commit()
+
+                        # Update occupancy using COUNT
+                        cursor.execute("""
+                            UPDATE room 
+                            SET current_occupancy = (
+                                SELECT COUNT(*) FROM student WHERE room_id = %s
+                            )
+                            WHERE id = %s
+                        """, (room_id, room_id))
+                        conn.commit()
+
+                        st.success("Student and meal added. Room occupancy updated.")
+                    except mysql.connector.Error as e:
+                        conn.rollback()
+                        st.error(f"MySQL Error: {e}")
+            else:
+                st.error("Room does not exist.")
 
 # --- DELETE STUDENT ---
 st.subheader("🗑️ Delete Student")
@@ -128,7 +124,7 @@ if st.button("Search"):
         meal_type = st.selectbox("Meal Type", ["A", "B"], key="meal_update")
         if st.button("Update Meal"):
             cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                        (search_id, meal_type, weekday))
+                           (search_id, meal_type, weekday))
             conn.commit()
             st.success("Meal updated!")
 
@@ -154,7 +150,7 @@ if st.button("Search"):
             guardian = st.text_input("Guardian Contact")
             if st.button("Insert Health Issue"):
                 cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
-                            (search_id, desc, prescription, guardian))
+                               (search_id, desc, prescription, guardian))
                 conn.commit()
                 st.success("Health issue added!")
     else:
