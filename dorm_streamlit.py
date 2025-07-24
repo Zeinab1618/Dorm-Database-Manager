@@ -170,12 +170,17 @@ if selected_table == "student":
 
                     if meal_submitted:
                         try:
-                            # Debug: Show values being updated
-                            st.write(f"Updating meal for student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
+                            # Debug: Show current and updated values
+                            st.write(f"Current meal: student_id={search_id}, weekday={current_weekday}, meal_type={current_meal_type}")
+                            st.write(f"Updating to: student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
                             
-                            # Replace meal record
-                            cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                                          (search_id, meal_type, weekday))
+                            # Update meal_type for the selected weekday, or insert if it doesn't exist
+                            cursor.execute("UPDATE Meals SET meal_type = %s WHERE student_id = %s AND weekday = %s",
+                                          (meal_type, search_id, weekday))
+                            if cursor.rowcount == 0:
+                                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                                              (search_id, meal_type, weekday))
+                            
                             conn.commit()
                             st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
                         except mysql.connector.Error as e:
@@ -295,7 +300,7 @@ elif selected_table == "Penalty":
     points = st.number_input("Total Points", step=1, min_value=0)
     if st.button("Update Penalty"):
         try:
-            cursor.execute("SELECT id FROM student WHERE id = %s", (student_id,))
+            cursor.execute("SELECT id FROM student WHERE id = %s", (search_id,))
             if cursor.fetchone():
                 cursor.execute("REPLACE INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
                               (student_id, points, datetime.now(eest)))
