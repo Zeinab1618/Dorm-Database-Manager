@@ -1,7 +1,8 @@
 import streamlit as st
-import mysql.connector
+import mysql set mysql.connector
 import pandas as pd
 from datetime import datetime
+from pytz import timezone
 
 # --- DATABASE CONNECTION ---
 conn = mysql.connector.connect(
@@ -13,6 +14,9 @@ conn = mysql.connector.connect(
     ssl_ca=st.secrets["mysql"]["ssl_ca"]
 )
 cursor = conn.cursor(dictionary=True)
+
+# Set MySQL session timezone to EEST (UTC+3)
+cursor.execute("SET SESSION time_zone = '+03:00';")
 
 st.title("Student Dorm Management")
 
@@ -32,6 +36,9 @@ if st.button("Show Table"):
         st.write(pd.DataFrame(rows))
     else:
         st.info("No data found.")
+
+# Define EEST timezone
+eest = timezone('Europe/Tallinn')  # EEST is used in Tallinn, Estonia
 
 # --- TABLE-SPECIFIC OPERATIONS ---
 if selected_table == "student":
@@ -88,9 +95,9 @@ if selected_table == "student":
                                     cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
                                                 (student_id, health_desc, prescription, guardian_contact))
                                 
-                                # Insert penalty record with 0 points
+                                # Insert penalty record with 0 points and EEST timestamp
                                 cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
-                                            (student_id, 0, datetime.now()))
+                                            (student_id, 0, datetime.now(eest)))
                                 
                                 # Update room occupancy
                                 cursor.execute("""
@@ -258,7 +265,7 @@ elif selected_table == "Penalty":
         if cursor.fetchone():
             try:
                 cursor.execute("REPLACE INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
-                            (student_id, points, datetime.now()))
+                            (student_id, points, datetime.now(eest)))
                 conn.commit()
                 st.success("Penalty points and timestamp updated.")
             except mysql.connector.Error as e:
