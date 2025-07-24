@@ -28,17 +28,54 @@ if menu == "Students":
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
         contact = st.text_input("Contact")
-        room_id = st.number_input("Room ID", step=1)
+
+        # Get available rooms
+        cursor.execute("SELECT id FROM room WHERE current_occupancy < capacity")
+        available_rooms = [row['id'] for row in cursor.fetchall()]
+        if available_rooms:
+            room_id = st.selectbox("Select Room ID (only rooms with space)", available_rooms)
+        else:
+            st.warning("No rooms available with free capacity.")
+            room_id = None
+
         if st.button("Insert Student"):
-            cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
-            conn.commit()
-            st.success("Student added!")
+            if room_id is None:
+                st.error("Please select a room with space.")
+            else:
+                # Check if student ID already exists
+                cursor.execute("SELECT * FROM student WHERE id = %s", (sid,))
+                if cursor.fetchone():
+                    st.error("Student ID already exists!")
+                else:
+                    try:
+                        cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
+                        cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
+                        conn.commit()
+                        st.success("Student added!")
+
+                        # Prompt for meal entry
+                        with st.expander("Add Meal for Student"):
+                            weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], key="add_meal_day")
+                            meal_type = st.selectbox("Meal Type", ["A", "B"], key="add_meal_type")
+                            if st.button("Insert Meal"):
+                                cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
+                                conn.commit()
+                                st.success("Meal added!")
+                    except Exception as e:
+                        st.error(f"Error inserting student: {e}")
 
     del_id = st.number_input("Delete Student by ID", step=1)
     if st.button("Delete Student"):
-        cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
-        conn.commit()
-        st.warning("Student deleted!")
+        cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
+        result = cursor.fetchone()
+        if result:
+            room_id = result['room_id']
+            cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
+            cursor.execute("UPDATE room SET current_occupancy = current_occupancy - 1 WHERE id = %s", (room_id,))
+            conn.commit()
+            st.warning("Student deleted!")
+        else:
+            st.error("Student not found")
 
     search_id = st.number_input("Search Student by ID", step=1, key="search")
     if st.button("Search"):
