@@ -2,6 +2,7 @@ import streamlit as st
 import mysql.connector
 import pandas as pd
 
+# Connect to Aiven MySQL
 conn = mysql.connector.connect(
     host=st.secrets["mysql"]["host"],
     user=st.secrets["mysql"]["user"],
@@ -27,55 +28,56 @@ if menu == "Students":
     with st.expander("Add New Student"):
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
-        contact = st.text_input("Contact")
-
-        # Get available rooms
-        cursor.execute("SELECT id FROM room WHERE current_occupancy < capacity")
-        available_rooms = [row['id'] for row in cursor.fetchall()]
-        if available_rooms:
-            room_id = st.selectbox("Select Room ID (only rooms with space)", available_rooms)
-        else:
-            st.warning("No rooms available with free capacity.")
-            room_id = None
+        contact = st.text_input("Contact (11 digits)")
+        room_id = st.number_input("Room ID", step=1)
 
         if st.button("Insert Student"):
-            if room_id is None:
-                st.error("Please select a room with space.")
+            if not contact.isdigit() or len(contact) != 11:
+                st.error("Contact number must be exactly 11 digits.")
             else:
-                # Check if student ID already exists
-                cursor.execute("SELECT * FROM student WHERE id = %s", (sid,))
+                cursor.execute("SELECT id FROM student WHERE id = %s", (sid,))
                 if cursor.fetchone():
-                    st.error("Student ID already exists!")
+                    st.error("A student with this ID already exists.")
                 else:
-                    try:
+                    cursor.execute("SELECT current_occupancy, capacity FROM room WHERE id = %s", (room_id,))
+                    room_data = cursor.fetchone()
+                    if not room_data:
+                        st.error("Room ID not found.")
+                    elif room_data["current_occupancy"] >= room_data["capacity"]:
+                        st.error("Room is full. Cannot assign more students.")
+                    else:
+                        # Insert student
                         cursor.execute("INSERT INTO student VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
+                        conn.commit()
+
+                        # Update room occupancy
                         cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
                         conn.commit()
-                        st.success("Student added!")
 
-                        # Prompt for meal entry
-                        with st.expander("Add Meal for Student"):
-                            weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], key="add_meal_day")
-                            meal_type = st.selectbox("Meal Type", ["A", "B"], key="add_meal_type")
-                            if st.button("Insert Meal"):
-                                cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
-                                conn.commit()
-                                st.success("Meal added!")
-                    except Exception as e:
-                        st.error(f"Error inserting student: {e}")
+                        st.success("Student added and room occupancy updated!")
+
+                        # Add meal info right after
+                        st.subheader("Add Meal Info for Student")
+                        weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+                        meal_type = st.selectbox("Meal Type", ["A", "B"])
+                        if st.button("Save Meal Info"):
+                            cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
+                            conn.commit()
+                            st.success("Meal info saved!")
 
     del_id = st.number_input("Delete Student by ID", step=1)
     if st.button("Delete Student"):
         cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
-        result = cursor.fetchone()
-        if result:
-            room_id = result['room_id']
+        room_row = cursor.fetchone()
+        if room_row:
             cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
-            cursor.execute("UPDATE room SET current_occupancy = current_occupancy - 1 WHERE id = %s", (room_id,))
             conn.commit()
-            st.warning("Student deleted!")
+            # Decrease room occupancy
+            cursor.execute("UPDATE room SET current_occupancy = current_occupancy - 1 WHERE id = %s", (room_row["room_id"],))
+            conn.commit()
+            st.warning("Student deleted and room occupancy updated!")
         else:
-            st.error("Student not found")
+            st.error("Student ID not found.")
 
     search_id = st.number_input("Search Student by ID", step=1, key="search")
     if st.button("Search"):
