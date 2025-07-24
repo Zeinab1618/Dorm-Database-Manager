@@ -19,10 +19,9 @@ except mysql.connector.Error as e:
     st.error(f"Database connection failed: {e}")
     st.stop()
 
-# Enable autocommit to ensure changes are saved
 conn.autocommit = True
 
-# Set MySQL session timezone to EEST (UTC+3)
+# Set timezone
 try:
     cursor.execute("SET SESSION time_zone = '+03:00';")
 except mysql.connector.Error as e:
@@ -38,7 +37,6 @@ st.subheader("📋 View Any Table")
 try:
     cursor.execute("SHOW TABLES")
     tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
-    # Ensure only valid tables are shown (case-sensitive)
     valid_tables = ["Building", "room", "student", "MaintenanceRequest", "Penalty", "Meals", "health_issues"]
     tables = [t for t in tables if t in valid_tables]
     selected_table = st.selectbox("Select a table to view:", tables)
@@ -59,83 +57,71 @@ if st.button("Show Table"):
     except mysql.connector.Error as e:
         st.error(f"Error fetching table data: {e}")
 
-# Define EEST timezone
-eest = timezone('Europe/Tallinn')  # EEST is used in Tallinn, Estonia
+eest = timezone('Europe/Tallinn')
 
-# --- TABLE-SPECIFIC OPERATIONS ---
+# --- STUDENT OPERATIONS ---
 if selected_table == "student":
-    # --- ADD STUDENT ---
+    # ADD STUDENT
     with st.expander("➕ Add New Student"):
         with st.form("add_student_form"):
             student_id = st.number_input("Student ID", step=1, min_value=1)
             student_name = st.text_input("Name")
             contact = st.text_input("Contact (11 digits)")
             room_id = st.number_input("Room ID", step=1, min_value=1)
-            
-            # Mandatory Meal Information
+
             st.subheader("Meal Information")
             weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
             meal_choice = st.selectbox("Meal Choice", ["A", "B"])
-            
-            # Optional Health Information
+
             st.subheader("Health Information (Optional)")
             add_health_info = st.checkbox("Add Health Information")
             health_desc = st.text_area("Health Description", disabled=not add_health_info)
             prescription = st.text_input("Prescription", disabled=not add_health_info)
             guardian_contact = st.text_input("Guardian Contact (11 digits)", disabled=not add_health_info)
-            
-            submitted = st.form_submit_button("Add Student")
 
+            submitted = st.form_submit_button("Add Student")
             if submitted:
                 if len(contact) != 11 or not contact.isdigit():
                     st.error("Contact must be exactly 11 digits.")
                 elif add_health_info and (not health_desc or not prescription or not guardian_contact):
-                    st.error("All health fields are required if health information is added.")
+                    st.error("All health fields are required if health info is added.")
                 elif add_health_info and (len(guardian_contact) != 11 or not guardian_contact.isdigit()):
                     st.error("Guardian contact must be exactly 11 digits.")
                 else:
                     try:
                         cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
                         room = cursor.fetchone()
-                        if room:
-                            if room["current_occupancy"] >= room["capacity"]:
-                                st.error("Room is full.")
-                            else:
-                                # Insert student
-                                cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
-                                              (student_id, student_name, contact, room_id))
-                                
-                                # Insert meal
-                                cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                                              (student_id, meal_choice, weekday))
-                                
-                                # Insert health issue if provided
-                                if add_health_info:
-                                    cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                                  (student_id, health_desc, prescription, guardian_contact))
-                                
-                                # Insert penalty record with 0 points and EEST timestamp
-                                cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
-                                              (student_id, 0, datetime.now(eest)))
-                                
-                                # Update room occupancy
-                                cursor.execute("""
-                                    UPDATE room 
-                                    SET current_occupancy = (
-                                        SELECT COUNT(*) FROM student WHERE room_id = %s
-                                    )
-                                    WHERE id = %s
-                                """, (room_id, room_id))
-                                
-                                conn.commit()
-                                st.success("Student, meal, and penalty information added. Health info added if provided. Room occupancy updated.")
+                        if room and room["current_occupancy"] < room["capacity"]:
+                            cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
+                                           (student_id, student_name, contact, room_id))
+
+                            cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                                           (student_id, meal_choice, weekday))
+
+                            if add_health_info:
+                                cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                               (student_id, health_desc, prescription, guardian_contact))
+
+                            cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
+                                           (student_id, 0, datetime.now(eest)))
+
+                            cursor.execute("""
+                                UPDATE room 
+                                SET current_occupancy = (
+                                    SELECT COUNT(*) FROM student WHERE room_id = %s
+                                )
+                                WHERE id = %s
+                            """, (room_id, room_id))
+
+                            conn.commit()
+                            st.success("Student and related data added.")
+                        else:
+                            st.error("Room is full or does not exist.")
                     except mysql.connector.Error as e:
                         conn.rollback()
                         st.error(f"MySQL Error: {e}")
-                    else:
-                        st.error("Room does not exist.")
 
-    # --- DELETE STUDENT ---
+    # DELETE STUDENT
     st.subheader("🗑️ Delete Student")
     del_id = st.number_input("Enter Student ID to Delete", step=1, min_value=1)
     if st.button("Delete Student"):
@@ -148,8 +134,6 @@ if selected_table == "student":
                 cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (del_id,))
                 cursor.execute("DELETE FROM Penalty WHERE student_id = %s", (del_id,))
                 cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
-                
-                # Update room occupancy
                 cursor.execute("""
                     UPDATE room 
                     SET current_occupancy = (
@@ -157,16 +141,15 @@ if selected_table == "student":
                     )
                     WHERE id = %s
                 """, (room_id, room_id))
-                
                 conn.commit()
-                st.warning("Student and related records deleted. Room occupancy updated.")
+                st.warning("Student and related data deleted.")
             else:
                 st.error("Student ID not found.")
         except mysql.connector.Error as e:
             conn.rollback()
             st.error(f"Error deleting student: {e}")
 
-    # --- SEARCH & EDIT ---
+    # SEARCH & EDIT STUDENT
     st.subheader("🔍 Search Student")
     search_id = st.number_input("Search Student by ID", step=1, key="search", min_value=1)
     if st.button("Search"):
@@ -179,116 +162,84 @@ if selected_table == "student":
                 st.error("Student ID not found.")
                 st.stop()
 
+            # Update Meal
             st.subheader("✏️ Change Meal")
-            # Fetch current meal info if available
-            try:
-                cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
-                current_meal = cursor.fetchone()
-                current_weekday = current_meal['weekday'] if current_meal else "Sunday"
-                current_meal_type = current_meal['meal_type'] if current_meal else "A"
-            except mysql.connector.Error as e:
-                st.error(f"Error fetching meal data: {e}")
-                current_weekday, current_meal_type = "Sunday", "A"
+            cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
+            current_meal = cursor.fetchone()
+            current_weekday = current_meal['weekday'] if current_meal else "Sunday"
+            current_meal_type = current_meal['meal_type'] if current_meal else "A"
 
             with st.form("update_meal_form"):
-                weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], 
-                                     index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
-                meal_type = st.selectbox("Meal Type", ["A", "B"], 
-                                       index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
+                weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
+                                       index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
+                meal_type = st.selectbox("Meal Type", ["A", "B"],
+                                         index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
                 meal_submitted = st.form_submit_button("Update Meal")
 
                 if meal_submitted:
                     try:
-                        # Debug: Show current and updated values
-                        st.write(f"Current meal: student_id={search_id}, weekday={current_weekday}, meal_type={current_meal_type}")
-                        st.write(f"Updating to: student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
-                        
-                        # Update or insert meal using INSERT ... ON DUPLICATE KEY UPDATE
+                        if weekday != current_weekday:
+                            cursor.execute("DELETE FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, current_weekday))
+
                         cursor.execute("""
-                            INSERT INTO Meals (student_id, meal_type, weekday) 
+                            INSERT INTO Meals (student_id, meal_type, weekday)
                             VALUES (%s, %s, %s)
                             ON DUPLICATE KEY UPDATE meal_type = %s
                         """, (search_id, meal_type, weekday, meal_type))
-                        
-                        rows_affected = cursor.rowcount
-                        st.write(f"Rows affected: {rows_affected} (1 = insert, 2 = update)")
-                        
-                        # Verify the update in the database
-                        cursor.execute("SELECT * FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday))
-                        updated_meal = cursor.fetchone()
-                        if updated_meal:
-                            st.write(f"Verified in database: student_id={updated_meal['student_id']}, weekday={updated_meal['weekday']}, meal_type={updated_meal['meal_type']}")
-                        else:
-                            st.warning("No meal record found after update, which should not happen.")
-                        
+
                         conn.commit()
-                        st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
+                        st.success(f"Meal updated for {weekday} to type {meal_type}.")
                     except mysql.connector.Error as e:
                         conn.rollback()
                         st.error(f"Error updating meal: {e}")
 
-            # Button to refresh Meals table view
-            if st.button("Refresh Meals Table"):
-                try:
-                    cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
-                    rows = cursor.fetchall()
-                    if rows:
-                        st.write(pd.DataFrame(rows))
-                    else:
-                        st.info("No meal records found for this student.")
-                except mysql.connector.Error as e:
-                    st.error(f"Error fetching Meals table: {e}")
-
+            # Health Issue
             st.subheader("🏥 Health Issue")
-            try:
-                cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
-                health = cursor.fetchone()
-                if health:
-                    with st.form("update_health_form"):
-                        desc = st.text_area("Description", health['description'])
-                        prescription = st.text_input("Prescription", health['prescription'])
-                        guardian = st.text_input("Guardian Contact", health['guardian_contact'])
-                        health_submitted = st.form_submit_button("Update Health Issue")
-
-                        if health_submitted:
+            cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
+            health = cursor.fetchone()
+            if health:
+                with st.form("update_health_form"):
+                    desc = st.text_area("Description", health['description'])
+                    prescription = st.text_input("Prescription", health['prescription'])
+                    guardian = st.text_input("Guardian Contact", health['guardian_contact'])
+                    health_submitted = st.form_submit_button("Update Health Issue")
+                    if health_submitted:
+                        try:
+                            cursor.execute("""
+                                UPDATE health_issues 
+                                SET description=%s, prescription=%s, guardian_contact=%s 
+                                WHERE student_id=%s
+                            """, (desc, prescription, guardian, search_id))
+                            conn.commit()
+                            st.success("Health issue updated.")
+                        except mysql.connector.Error as e:
+                            conn.rollback()
+                            st.error(f"Error updating health issue: {e}")
+            else:
+                st.info("No health issue found. Add new below:")
+                with st.form("add_health_form"):
+                    desc = st.text_area("Description")
+                    prescription = st.text_input("Prescription")
+                    guardian = st.text_input("Guardian Contact")
+                    if st.form_submit_button("Insert Health Issue"):
+                        if not desc or not prescription or not guardian:
+                            st.error("All health fields are required.")
+                        elif len(guardian) != 11 or not guardian.isdigit():
+                            st.error("Guardian contact must be exactly 11 digits.")
+                        else:
                             try:
-                                cursor.execute("""
-                                    UPDATE health_issues 
-                                    SET description=%s, prescription=%s, guardian_contact=%s 
-                                    WHERE student_id=%s
-                                """, (desc, prescription, guardian, search_id))
+                                cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
+                                               (search_id, desc, prescription, guardian))
                                 conn.commit()
-                                st.success("Health issue updated!")
+                                st.success("Health issue added.")
                             except mysql.connector.Error as e:
                                 conn.rollback()
-                                st.error(f"Error updating health issue: {e}")
-                else:
-                    st.info("No health issue found. Add new below:")
-                    with st.form("add_health_form"):
-                        desc = st.text_area("Description")
-                        prescription = st.text_input("Prescription")
-                        guardian = st.text_input("Guardian Contact")
-                        if st.form_submit_button("Insert Health Issue"):
-                            if not desc or not prescription or not guardian:
-                                st.error("All health fields are required.")
-                            elif len(guardian) != 11 or not guardian.isdigit():
-                                st.error("Guardian contact must be exactly 11 digits.")
-                            else:
-                                try:
-                                    cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
-                                                  (search_id, desc, prescription, guardian))
-                                    conn.commit()
-                                    st.success("Health issue added!")
-                                except mysql.connector.Error as e:
-                                    conn.rollback()
-                                    st.error(f"Error adding health issue: {e}")
-            except mysql.connector.Error as e:
-                st.error(f"Error fetching health issues: {e}")
+                                st.error(f"Error adding health issue: {e}")
         except mysql.connector.Error as e:
             st.error(f"Error searching student: {e}")
 
+# --- MAINTENANCE REQUESTS ---
 elif selected_table == "MaintenanceRequest":
-    # --- ADD MAINTENANCE REQUEST ---
     with st.expander("➕ Add Maintenance Request"):
         with st.form("add_maintenance_form"):
             request_id = st.number_input("Request ID", step=1, min_value=1)
@@ -296,25 +247,22 @@ elif selected_table == "MaintenanceRequest":
             description = st.text_area("Description")
             status = st.selectbox("Status", ["Pending", "In Progress", "Resolved"])
             submitted = st.form_submit_button("Add Request")
-
             if submitted:
                 try:
                     cursor.execute("INSERT INTO MaintenanceRequest (id, statues, room_id, description) VALUES (%s, %s, %s, %s)",
-                                  (request_id, status, room_id, description))
+                                   (request_id, status, room_id, description))
                     conn.commit()
                     st.success("Maintenance request added.")
                 except mysql.connector.Error as e:
                     conn.rollback()
                     st.error(f"Error adding maintenance request: {e}")
 
-    # --- UPDATE MAINTENANCE REQUEST ---
     st.subheader("✏️ Update Maintenance Request")
     with st.form("update_maintenance_form"):
         update_request_id = st.number_input("Request ID to Update", step=1, min_value=1)
         new_status = st.selectbox("New Status", ["Pending", "In Progress", "Resolved"], key="update_status")
         new_description = st.text_area("New Description", key="update_desc")
         update_submitted = st.form_submit_button("Update Request")
-
         if update_submitted:
             try:
                 cursor.execute("SELECT id FROM MaintenanceRequest WHERE id = %s", (update_request_id,))
@@ -332,7 +280,6 @@ elif selected_table == "MaintenanceRequest":
                 conn.rollback()
                 st.error(f"Error updating maintenance request: {e}")
 
-    # --- DELETE MAINTENANCE REQUEST ---
     st.subheader("🗑️ Delete Maintenance Request")
     del_request_id = st.number_input("Enter Request ID to Delete", step=1, min_value=1)
     if st.button("Delete Request"):
@@ -346,8 +293,8 @@ elif selected_table == "MaintenanceRequest":
         except mysql.connector.Error as e:
             st.error(f"Error deleting maintenance request: {e}")
 
+# --- PENALTY ---
 elif selected_table == "Penalty":
-    # --- UPDATE PENALTY ---
     st.subheader("✏️ Update Penalty Points")
     student_id = st.number_input("Student ID", step=1, min_value=1)
     points = st.number_input("Total Points", step=1, min_value=0)
@@ -356,7 +303,7 @@ elif selected_table == "Penalty":
             cursor.execute("SELECT id FROM student WHERE id = %s", (student_id,))
             if cursor.fetchone():
                 cursor.execute("REPLACE INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
-                              (student_id, points, datetime.now(eest)))
+                               (student_id, points, datetime.now(eest)))
                 conn.commit()
                 st.success("Penalty points and timestamp updated.")
             else:
