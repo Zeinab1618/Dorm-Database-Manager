@@ -1,9 +1,9 @@
 import streamlit as st
 import mysql.connector
 import pandas as pd
-from datetime import datetime
+import datetime
 
-# --- DATABASE CONNECTION ---
+# --- DB CONNECTION ---
 conn = mysql.connector.connect(
     host=st.secrets["mysql"]["host"],
     user=st.secrets["mysql"]["user"],
@@ -16,36 +16,44 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("Student Dorm Management")
 
-# --- VIEW TABLES ---
+# --- VIEW TABLE ---
+st.subheader("📋 View Any Table")
 cursor.execute("SHOW TABLES")
 tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
-tables = [t for t in tables if t.lower() not in ("meal", "building")]
-selected_table = st.selectbox("📋 Select a table to view:", tables)
+tables = [t for t in tables if t.lower() not in ("meal", "building")]  # remove invalid names
+selected_table = st.selectbox("Select a table to view:", tables)
 
-if selected_table:
+if st.button("Show Table"):
     cursor.execute(f"SELECT * FROM {selected_table}")
     rows = cursor.fetchall()
-    st.subheader(f"📄 {selected_table} Table Data")
-    st.dataframe(pd.DataFrame(rows))
+    if rows:
+        st.write(pd.DataFrame(rows))
+    else:
+        st.info("No data found.")
 
-    # --- STUDENT TABLE OPERATIONS ---
-    if selected_table == "student":
-        with st.expander("➕ Add Student"):
+# --- DYNAMIC OPERATIONS ---
+if selected_table:
+    st.markdown("---")
+    if selected_table.lower() == "student":
+
+        with st.expander("➕ Add New Student"):
             with st.form("add_student_form"):
                 student_id = st.number_input("Student ID", step=1)
                 student_name = st.text_input("Name")
                 contact = st.text_input("Contact (11 digits)")
                 room_id = st.number_input("Room ID", step=1)
-                weekday = st.selectbox("Meal Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+                weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
                 meal_choice = st.selectbox("Meal Choice", ["A", "B"])
 
-                # Health Issue
-                st.markdown("**Health Issue (Optional)**")
-                description = st.text_area("Description")
-                prescription = st.text_input("Prescription")
-                guardian_contact = st.text_input("Guardian Contact")
+                # Optional Health Issue Fields
+                add_health = st.checkbox("Add Health Issue Info")
+                if add_health:
+                    description = st.text_area("Health Description")
+                    prescription = st.text_input("Prescription")
+                    guardian_contact = st.text_input("Guardian Contact")
 
                 submitted = st.form_submit_button("Add Student")
+
                 if submitted:
                     if len(contact) != 11 or not contact.isdigit():
                         st.error("Contact must be exactly 11 digits.")
@@ -57,28 +65,38 @@ if selected_table:
                                 st.error("Room is full.")
                             else:
                                 try:
+                                    # Insert Student
                                     cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
                                                    (student_id, student_name, contact, room_id))
                                     conn.commit()
 
+                                    # Add Meal
                                     cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
                                                    (student_id, meal_choice, weekday))
                                     conn.commit()
 
-                                    cursor.execute("UPDATE room SET current_occupancy = (SELECT COUNT(*) FROM student WHERE room_id = %s) WHERE id = %s",
-                                                   (room_id, room_id))
+                                    # Add Penalty
+                                    cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, 0, %s)",
+                                                   (student_id, datetime.datetime.now()))
                                     conn.commit()
 
-                                    cursor.execute("INSERT INTO penalty (student_id, total_points, time_of_penalty) VALUES (%s, %s, %s)",
-                                                   (student_id, 0, datetime.now()))
-                                    conn.commit()
-
-                                    if description or prescription or guardian_contact:
-                                        cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                    # Optional: Add Health
+                                    if add_health:
+                                        cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
                                                        (student_id, description, prescription, guardian_contact))
                                         conn.commit()
 
-                                    st.success("Student, meal, penalty, and optional health issue added successfully.")
+                                    # Update Room Occupancy
+                                    cursor.execute("""
+                                        UPDATE room 
+                                        SET current_occupancy = (
+                                            SELECT COUNT(*) FROM student WHERE room_id = %s
+                                        )
+                                        WHERE id = %s
+                                    """, (room_id, room_id))
+                                    conn.commit()
+
+                                    st.success("Student added with related info!")
                                 except mysql.connector.Error as e:
                                     conn.rollback()
                                     st.error(f"MySQL Error: {e}")
@@ -86,7 +104,7 @@ if selected_table:
                             st.error("Room does not exist.")
 
         st.subheader("🗑️ Delete Student")
-        del_id = st.number_input("Student ID to Delete", step=1)
+        del_id = st.number_input("Enter Student ID to Delete", step=1, key="del")
         if st.button("Delete Student"):
             cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
             room_data = cursor.fetchone()
@@ -95,29 +113,35 @@ if selected_table:
                     room_id = room_data["room_id"]
                     cursor.execute("DELETE FROM Meals WHERE student_id = %s", (del_id,))
                     cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (del_id,))
-                    cursor.execute("DELETE FROM penalty WHERE student_id = %s", (del_id,))
+                    cursor.execute("DELETE FROM Penalty WHERE student_id = %s", (del_id,))
                     cursor.execute("DELETE FROM student WHERE id = %s", (del_id,))
                     conn.commit()
 
-                    cursor.execute("UPDATE room SET current_occupancy = (SELECT COUNT(*) FROM student WHERE room_id = %s) WHERE id = %s",
-                                   (room_id, room_id))
+                    cursor.execute("""
+                        UPDATE room 
+                        SET current_occupancy = (
+                            SELECT COUNT(*) FROM student WHERE room_id = %s
+                        )
+                        WHERE id = %s
+                    """, (room_id, room_id))
                     conn.commit()
-                    st.success("Student and related records deleted.")
+
+                    st.warning("Student deleted with related records.")
                 except mysql.connector.Error as e:
                     conn.rollback()
                     st.error(f"Error deleting student: {e}")
             else:
-                st.error("Student ID not found.")
+                st.error("Student not found.")
 
         st.subheader("🔍 Search Student")
-        search_id = st.number_input("Enter Student ID to Search", step=1, key="search")
-        if st.button("Search Student"):
+        search_id = st.number_input("Search Student by ID", step=1, key="search")
+        if st.button("Search"):
             cursor.execute("SELECT * FROM student WHERE id = %s", (search_id,))
             student = cursor.fetchone()
             if student:
                 st.json(student)
 
-                st.subheader("✏️ Update Meal")
+                st.subheader("✏️ Change Meal")
                 weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
                 meal_type = st.selectbox("Meal Type", ["A", "B"], key="meal_update")
                 if st.button("Update Meal"):
@@ -134,10 +158,11 @@ if selected_table:
                     prescription = st.text_input("Prescription", health['prescription'])
                     guardian = st.text_input("Guardian Contact", health['guardian_contact'])
                     if st.button("Update Health Issue"):
-                        cursor.execute("""UPDATE health_issues 
-                                          SET description=%s, prescription=%s, guardian_contact=%s 
-                                          WHERE student_id=%s""",
-                                       (desc, prescription, guardian, search_id))
+                        cursor.execute("""
+                            UPDATE health_issues 
+                            SET description=%s, prescription=%s, guardian_contact=%s 
+                            WHERE student_id=%s
+                        """, (desc, prescription, guardian, search_id))
                         conn.commit()
                         st.success("Health issue updated!")
                 else:
@@ -153,61 +178,61 @@ if selected_table:
             else:
                 st.error("Student not found.")
 
-    # --- PENALTY TABLE OPERATIONS ---
-    elif selected_table == "penalty":
-        st.subheader("➕ Add Penalty")
-        sid = st.number_input("Student ID", step=1)
-        points = st.number_input("Total Points", step=1)
-        if st.button("Add Penalty"):
-            try:
-                cursor.execute("INSERT INTO penalty (student_id, total_points, time_of_penalty) VALUES (%s, %s, %s)",
-                               (sid, points, datetime.now()))
-                conn.commit()
-                st.success("Penalty added!")
-            except mysql.connector.Error as e:
-                st.error(f"MySQL Error: {e}")
+    elif selected_table.lower() == "penalty":
+        st.subheader("➕ Add New Penalty")
+        with st.form("add_penalty"):
+            sid = st.number_input("Student ID", step=1)
+            points = st.number_input("Total Points", step=1)
+            submit_pen = st.form_submit_button("Insert")
+            if submit_pen:
+                now = datetime.datetime.now()
+                try:
+                    cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
+                                   (sid, points, now))
+                    conn.commit()
+                    st.success("Penalty inserted.")
+                except:
+                    conn.rollback()
+                    st.error("Insert failed.")
 
-        st.subheader("✏️ Update Total Points Only")
-        update_id = st.number_input("Penalty Student ID to Update", step=1, key="update_penalty")
-        new_points = st.number_input("New Total Points", step=1, key="new_points")
-        if st.button("Update Penalty"):
-            try:
-                cursor.execute("UPDATE penalty SET total_points=%s, time_of_penalty=%s WHERE student_id=%s",
-                               (new_points, datetime.now(), update_id))
+        st.subheader("✏️ Update Penalty Points")
+        with st.form("update_penalty"):
+            sid = st.number_input("Student ID to Update", step=1, key="penalty_update")
+            new_points = st.number_input("New Total Points", step=1)
+            update_btn = st.form_submit_button("Update Penalty")
+            if update_btn:
+                now = datetime.datetime.now()
+                cursor.execute("UPDATE Penalty SET total_points=%s, last_updated=%s WHERE student_id=%s",
+                               (new_points, now, sid))
                 conn.commit()
                 st.success("Penalty updated.")
-            except mysql.connector.Error as e:
-                st.error(f"MySQL Error: {e}")
 
-    # --- MAINTENANCE & HEALTH ISSUES UPDATE ---
-    elif selected_table in ["maintenance_requests", "health_issues"]:
-        st.subheader("✏️ Update Record (Not Student ID)")
+    elif selected_table.lower() in ("maintenance_requests", "health_issues"):
+        st.subheader("✏️ Update Record")
         cursor.execute(f"SELECT * FROM {selected_table}")
-        records = cursor.fetchall()
-        if records:
-            record_df = pd.DataFrame(records)
-            editable_id = st.selectbox("Select Record to Update", record_df.iloc[:, 0].tolist())
-            editable = next((r for r in records if r[list(r.keys())[0]] == editable_id), None)
-            if editable:
-                update_data = {}
-                for key, val in editable.items():
-                    if key == "student_id":
-                        continue  # don't allow updating student_id
-                    new_val = st.text_input(f"{key}", value=str(val))
-                    update_data[key] = new_val
-                if st.button("Update Record"):
-                    set_clause = ", ".join([f"{k} = %s" for k in update_data.keys()])
-                    values = list(update_data.values()) + [editable_id]
-                    pk_col = list(editable.keys())[0]
-                    try:
-                        cursor.execute(f"UPDATE {selected_table} SET {set_clause} WHERE {pk_col} = %s", values)
+        rows = cursor.fetchall()
+        if rows:
+            df = pd.DataFrame(rows)
+            st.dataframe(df)
+            record_id = st.number_input("Enter Student ID to Edit", step=1)
+            if st.button("Load Record"):
+                cursor.execute(f"SELECT * FROM {selected_table} WHERE student_id = %s", (record_id,))
+                data = cursor.fetchone()
+                if data:
+                    new_data = {}
+                    for key in data:
+                        if key != "student_id":
+                            new_data[key] = st.text_input(f"{key}", value=data[key])
+                    if st.button("Update Record"):
+                        update_query = f"UPDATE {selected_table} SET " + ", ".join(
+                            f"{key} = %s" for key in new_data.keys()) + " WHERE student_id = %s"
+                        values = list(new_data.values()) + [record_id]
+                        cursor.execute(update_query, values)
                         conn.commit()
-                        st.success(f"{selected_table} record updated.")
-                    except mysql.connector.Error as e:
-                        st.error(f"MySQL Error: {e}")
-else:
-    st.warning("Please select a table to view.")
+                        st.success("Record updated.")
+                else:
+                    st.warning("ID not found.")
 
-# --- CLOSE CONNECTION ---
+# --- CLOSE DB ---
 cursor.close()
 conn.close()
