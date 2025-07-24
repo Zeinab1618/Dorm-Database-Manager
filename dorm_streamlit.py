@@ -42,7 +42,7 @@ eest = timezone('Europe/Tallinn')  # EEST is used in Tallinn, Estonia
 
 # --- TABLE-SPECIFIC OPERATIONS ---
 if selected_table == "student":
-    # --- ADD STUDENT (Reverted to provided code with Penalty and optional health info) ---
+    # --- ADD STUDENT (From your provided code with Penalty and optional health info) ---
     with st.expander("➕ Add New Student"):
         with st.form("add_student_form"):
             student_id = st.number_input("Student ID", step=1, min_value=1)
@@ -154,13 +154,37 @@ if selected_table == "student":
             st.json(student)
 
             st.subheader("✏️ Change Meal")
-            weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-            meal_type = st.selectbox("Meal Type", ["A", "B"], key="meal_update")
+            # Show current meal info if available
+            cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
+            current_meal = cursor.fetchone()
+            current_weekday = current_meal['weekday'] if current_meal else "Sunday"
+            current_meal_type = current_meal['meal_type'] if current_meal else "A"
+            
+            weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
+            meal_type = st.selectbox("Meal Type", ["A", "B"], index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
             if st.button("Update Meal"):
-                cursor.execute("REPLACE INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
-                              (search_id, meal_type, weekday))
-                conn.commit()
-                st.success("Meal updated!")
+                try:
+                    # Check if a meal record exists for this student and weekday
+                    cursor.execute("SELECT 1 FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday))
+                    meal_exists = cursor.fetchone()
+                    if meal_exists:
+                        # Update existing meal record
+                        cursor.execute("""
+                            UPDATE Meals 
+                            SET meal_type = %s 
+                            WHERE student_id = %s AND weekday = %s
+                        """, (meal_type, search_id, weekday))
+                        conn.commit()
+                        st.success("Meal updated!")
+                    else:
+                        # Insert new meal record
+                        cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                                      (search_id, meal_type, weekday))
+                        conn.commit()
+                        st.success("New meal record added!")
+                except mysql.connector.Error as e:
+                    conn.rollback()
+                    st.error(f"Error updating meal: {e}")
 
             st.subheader("🏥 Health Issue")
             cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
