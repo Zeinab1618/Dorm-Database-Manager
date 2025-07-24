@@ -40,7 +40,7 @@ if menu == "Students":
                 cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
 
                 # Update room occupancy
-                cursor.execute("UPDATE room SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
+                cursor.execute("UPDATE room SET current_occupancy + 1 WHERE id = %s", (room_id,))
 
                 conn.commit()
                 st.success("Student added!")
