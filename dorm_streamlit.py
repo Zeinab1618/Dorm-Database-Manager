@@ -178,63 +178,47 @@ if selected_table == "student":
 
                 st.subheader("✏️ Change Meal")
                 # Fetch current meal info if available
-                cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
-                current_meal = cursor.fetchone()
-                current_weekday = current_meal['weekday'] if current_meal else "Sunday"
-                current_meal_type = current_meal['meal_type'] if current_meal else "A"
-
+                cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
+                current_meals = cursor.fetchall()
+                
+                # Create a dictionary of weekday to meal_type for existing meals
+                existing_meals = {meal['weekday']: meal['meal_type'] for meal in current_meals}
+                
                 with st.form("update_meal_form"):
-                    weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], 
-                                         index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
-                    meal_type = st.selectbox("Meal Type", ["A", "B"], 
-                                           index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
+                    weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
+                    meal_type = st.selectbox("Meal Type", ["A", "B"])
+                    
+                    # Set default values if meal exists for the selected weekday
+                    if weekday in existing_meals:
+                        meal_type_index = 0 if existing_meals[weekday] == "A" else 1
+                        st.write(f"Current meal for {weekday}: {existing_meals[weekday]}")
+                    
                     meal_submitted = st.form_submit_button("Update Meal")
 
                     if meal_submitted:
                         try:
-                            # Debug: Show current and updated values
-                            st.write(f"Current meal: student_id={search_id}, weekday={current_weekday}, meal_type={current_meal_type}")
-                            st.write(f"Updating to: student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
-                            
-                            # Update or insert meal using INSERT ... ON DUPLICATE KEY UPDATE
+                            # Use REPLACE to update or insert the meal
                             cursor.execute("""
-                                INSERT INTO Meals (student_id, meal_type, weekday) 
+                                REPLACE INTO Meals (student_id, weekday, meal_type)
                                 VALUES (%s, %s, %s)
-                                ON DUPLICATE KEY UPDATE meal_type = %s
-                            """, (search_id, meal_type, weekday, meal_type))
+                            """, (search_id, weekday, meal_type))
                             
-                            rows_affected = cursor.rowcount
-                            st.write(f"Rows affected: {rows_affected} (1 = insert, 2 = update)")
                             conn.commit()
                             st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
                             
-                            # Verify the update in the database
-                            cursor.execute("SELECT * FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday))
-                            updated_meal = cursor.fetchone()
-                            if updated_meal:
-                                st.write(f"Verified in database: student_id={updated_meal['student_id']}, weekday={updated_meal['weekday']}, meal_type={updated_meal['meal_type']}")
-                            else:
-                                st.warning("No meal record found after update, which should not happen.")
+                            # Refresh the display
+                            cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
+                            updated_meals = cursor.fetchall()
+                            st.write(pd.DataFrame(updated_meals))
                         except mysql.connector.Error as e:
                             conn.rollback()
                             st.error(f"Error updating meal: {e}")
-
-                # Button to refresh Meals table view
-                if st.button("Refresh Meals Table"):
-                    try:
-                        cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
-                        rows = cursor.fetchall()
-                        if rows:
-                            st.write(pd.DataFrame(rows))
-                        else:
-                            st.info("No meal records found for this student.")
-                    except mysql.connector.Error as e:
-                        st.error(f"Error fetching Meals table: {e}")
 
                 st.subheader("🏥 Health Issue")
                 try:
                     cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
                     health = cursor.fetchone()
+                    
                     if health:
                         with st.form("update_health_form"):
                             desc = st.text_area("Description", health['description'])
@@ -246,8 +230,10 @@ if selected_table == "student":
                                 try:
                                     cursor.execute("""
                                         UPDATE health_issues 
-                                        SET description=%s, prescription=%s, guardian_contact=%s 
-                                        WHERE student_id=%s
+                                        SET description = %s, 
+                                            prescription = %s, 
+                                            guardian_contact = %s 
+                                        WHERE student_id = %s
                                     """, (desc, prescription, guardian, search_id))
                                     conn.commit()
                                     st.success("Health issue updated!")
@@ -267,8 +253,11 @@ if selected_table == "student":
                                     st.error("Guardian contact must be exactly 11 digits.")
                                 else:
                                     try:
-                                        cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
-                                                      (search_id, desc, prescription, guardian))
+                                        cursor.execute("""
+                                            INSERT INTO health_issues 
+                                            (student_id, description, prescription, guardian_contact) 
+                                            VALUES (%s, %s, %s, %s)
+                                        """, (search_id, desc, prescription, guardian))
                                         conn.commit()
                                         st.success("Health issue added!")
                                     except mysql.connector.Error as e:
