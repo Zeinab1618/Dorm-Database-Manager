@@ -5,47 +5,66 @@ from datetime import datetime
 from pytz import timezone
 
 # --- DATABASE CONNECTION ---
-conn = mysql.connector.connect(
-    host=st.secrets["mysql"]["host"],
-    user=st.secrets["mysql"]["user"],
-    password=st.secrets["mysql"]["password"],
-    database=st.secrets["mysql"]["database"],
-    port=st.secrets["mysql"]["port"],
-    ssl_ca=st.secrets["mysql"]["ssl_ca"]
-)
-cursor = conn.cursor(dictionary=True)
+try:
+    conn = mysql.connector.connect(
+        host=st.secrets["mysql"]["host"],
+        user=st.secrets["mysql"]["user"],
+        password=st.secrets["mysql"]["password"],
+        database=st.secrets["mysql"]["database"],
+        port=st.secrets["mysql"]["port"],
+        ssl_ca=st.secrets["mysql"]["ssl_ca"]
+    )
+    cursor = conn.cursor(dictionary=True)
+except mysql.connector.Error as e:
+    st.error(f"Database connection failed: {e}")
+    st.stop()
 
 # Enable autocommit to ensure changes are saved
 conn.autocommit = True
 
 # Set MySQL session timezone to EEST (UTC+3)
-cursor.execute("SET SESSION time_zone = '+03:00';")
+try:
+    cursor.execute("SET SESSION time_zone = '+03:00';")
+except mysql.connector.Error as e:
+    st.error(f"Failed to set session timezone: {e}")
+    cursor.close()
+    conn.close()
+    st.stop()
 
 st.title("Student Dorm Management")
 
 # --- VIEW TABLES ---
 st.subheader("📋 View Any Table")
-cursor.execute("SHOW TABLES")
-tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
-# Ensure only valid tables are shown (case-sensitive)
-valid_tables = ["Building", "room", "student", "MaintenanceRequest", "Penalty", "Meals", "health_issues"]
-tables = [t for t in tables if t in valid_tables]
-selected_table = st.selectbox("Select a table to view:", tables)
+try:
+    cursor.execute("SHOW TABLES")
+    tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
+    # Ensure only valid tables are shown (case-sensitive)
+    valid_tables = ["Building", "room", "student", "MaintenanceRequest", "Penalty", "Meals", "health_issues"]
+    tables = [t for t in tables if t in valid_tables]
+    selected_table = st.selectbox("Select a table to view:", tables)
+except mysql.connector.Error as e:
+    st.error(f"Error fetching tables: {e}")
+    cursor.close()
+    conn.close()
+    st.stop()
 
 if st.button("Show Table"):
-    cursor.execute(f"SELECT * FROM {selected_table}")
-    rows = cursor.fetchall()
-    if rows:
-        st.write(pd.DataFrame(rows))
-    else:
-        st.info("No data found.")
+    try:
+        cursor.execute(f"SELECT * FROM {selected_table}")
+        rows = cursor.fetchall()
+        if rows:
+            st.write(pd.DataFrame(rows))
+        else:
+            st.info("No data found.")
+    except mysql.connector.Error as e:
+        st.error(f"Error fetching table data: {e}")
 
 # Define EEST timezone
 eest = timezone('Europe/Tallinn')  # EEST is used in Tallinn, Estonia
 
 # --- TABLE-SPECIFIC OPERATIONS ---
 if selected_table == "student":
-    # --- ADD STUDENT (From your provided code with Penalty and optional health info) ---
+    # --- ADD STUDENT ---
     with st.expander("➕ Add New Student"):
         with st.form("add_student_form"):
             student_id = st.number_input("Student ID", step=1, min_value=1)
@@ -75,13 +94,13 @@ if selected_table == "student":
                 elif add_health_info and (len(guardian_contact) != 11 or not guardian_contact.isdigit()):
                     st.error("Guardian contact must be exactly 11 digits.")
                 else:
-                    cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
-                    room = cursor.fetchone()
-                    if room:
-                        if room["current_occupancy"] >= room["capacity"]:
-                            st.error("Room is full.")
-                        else:
-                            try:
+                    try:
+                        cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
+                        room = cursor.fetchone()
+                        if room:
+                            if room["current_occupancy"] >= room["capacity"]:
+                                st.error("Room is full.")
+                            else:
                                 # Insert student
                                 cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
                                               (student_id, student_name, contact, room_id))
@@ -110,9 +129,9 @@ if selected_table == "student":
                                 
                                 conn.commit()
                                 st.success("Student, meal, and penalty information added. Health info added if provided. Room occupancy updated.")
-                            except mysql.connector.Error as e:
-                                conn.rollback()
-                                st.error(f"MySQL Error: {e}")
+                    except mysql.connector.Error as e:
+                        conn.rollback()
+                        st.error(f"MySQL Error: {e}")
                     else:
                         st.error("Room does not exist.")
 
@@ -120,10 +139,10 @@ if selected_table == "student":
     st.subheader("🗑️ Delete Student")
     del_id = st.number_input("Enter Student ID to Delete", step=1, min_value=1)
     if st.button("Delete Student"):
-        cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
-        room_data = cursor.fetchone()
-        if room_data:
-            try:
+        try:
+            cursor.execute("SELECT room_id FROM student WHERE id = %s", (del_id,))
+            room_data = cursor.fetchone()
+            if room_data:
                 room_id = room_data["room_id"]
                 cursor.execute("DELETE FROM Meals WHERE student_id = %s", (del_id,))
                 cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (del_id,))
@@ -141,11 +160,11 @@ if selected_table == "student":
                 
                 conn.commit()
                 st.warning("Student and related records deleted. Room occupancy updated.")
-            except mysql.connector.Error as e:
-                conn.rollback()
-                st.error(f"Error deleting student: {e}")
-        else:
-            st.error("Student ID not found.")
+            else:
+                st.error("Student ID not found.")
+        except mysql.connector.Error as e:
+            conn.rollback()
+            st.error(f"Error deleting student: {e}")
 
     # --- SEARCH & EDIT ---
     st.subheader("🔍 Search Student")
@@ -156,52 +175,72 @@ if selected_table == "student":
             student = cursor.fetchone()
             if student:
                 st.json(student)
+            else:
+                st.error("Student ID not found.")
+                st.stop()
 
-                st.subheader("✏️ Change Meal")
-                # Fetch current meal info if available
+            st.subheader("✏️ Change Meal")
+            # Fetch current meal info if available
+            try:
                 cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
                 current_meal = cursor.fetchone()
                 current_weekday = current_meal['weekday'] if current_meal else "Sunday"
                 current_meal_type = current_meal['meal_type'] if current_meal else "A"
+            except mysql.connector.Error as e:
+                st.error(f"Error fetching meal data: {e}")
+                current_weekday, current_meal_type = "Sunday", "A"
 
-                with st.form("update_meal_form"):
-                    weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], 
-                                         index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
-                    meal_type = st.selectbox("Meal Type", ["A", "B"], 
-                                           index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
-                    meal_submitted = st.form_submit_button("Update Meal")
+            with st.form("update_meal_form"):
+                weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], 
+                                     index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
+                meal_type = st.selectbox("Meal Type", ["A", "B"], 
+                                       index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
+                meal_submitted = st.form_submit_button("Update Meal")
 
-                    if meal_submitted:
-                        try:
-                            # Debug: Show current and updated values
-                            st.write(f"Current meal: student_id={search_id}, weekday={current_weekday}, meal_type={current_meal_type}")
-                            st.write(f"Updating to: student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
-                            
-                            # Update or insert meal using INSERT ... ON DUPLICATE KEY UPDATE
-                            cursor.execute("""
-                                INSERT INTO Meals (student_id, meal_type, weekday) 
-                                VALUES (%s, %s, %s)
-                                ON DUPLICATE KEY UPDATE meal_type = %s
-                            """, (search_id, meal_type, weekday, meal_type))
-                            
-                            rows_affected = cursor.rowcount
-                            conn.commit()
-                            st.write(f"Rows affected: {rows_affected} (1 = insert, 2 = update)")
-                            st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
-                        except mysql.connector.Error as e:
-                            conn.rollback()
-                            st.error(f"Error updating meal: {e}")
+                if meal_submitted:
+                    try:
+                        # Debug: Show current and updated values
+                        st.write(f"Current meal: student_id={search_id}, weekday={current_weekday}, meal_type={current_meal_type}")
+                        st.write(f"Updating to: student_id={search_id}, weekday={weekday}, meal_type={meal_type}")
+                        
+                        # Update or insert meal using INSERT ... ON DUPLICATE KEY UPDATE
+                        cursor.execute("""
+                            INSERT INTO Meals (student_id, meal_type, weekday) 
+                            VALUES (%s, %s, %s)
+                            ON DUPLICATE KEY UPDATE meal_type = %s
+                        """, (search_id, meal_type, weekday, meal_type))
+                        
+                        rows_affected = cursor.rowcount
+                        st.write(f"Rows affected: {rows_affected} (1 = insert, 2 = update)")
+                        
+                        # Verify the update in the database
+                        cursor.execute("SELECT * FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday))
+                        updated_meal = cursor.fetchone()
+                        if updated_meal:
+                            st.write(f"Verified in database: student_id={updated_meal['student_id']}, weekday={updated_meal['weekday']}, meal_type={updated_meal['meal_type']}")
+                        else:
+                            st.warning("No meal record found after update, which should not happen.")
+                        
+                        conn.commit()
+                        st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
+                    except mysql.connector.Error as e:
+                        conn.rollback()
+                        st.error(f"Error updating meal: {e}")
 
-                # Button to refresh Meals table view
-                if st.button("Refresh Meals Table"):
+            # Button to refresh Meals table view
+            if st.button("Refresh Meals Table"):
+                try:
                     cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
                     rows = cursor.fetchall()
                     if rows:
                         st.write(pd.DataFrame(rows))
                     else:
                         st.info("No meal records found for this student.")
+                except mysql.connector.Error as e:
+                    st.error(f"Error fetching Meals table: {e}")
 
-                st.subheader("🏥 Health Issue")
+            st.subheader("🏥 Health Issue")
+            try:
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
                 health = cursor.fetchone()
                 if health:
@@ -243,8 +282,8 @@ if selected_table == "student":
                                 except mysql.connector.Error as e:
                                     conn.rollback()
                                     st.error(f"Error adding health issue: {e}")
-            else:
-                st.error("Student not found.")
+            except mysql.connector.Error as e:
+                st.error(f"Error fetching health issues: {e}")
         except mysql.connector.Error as e:
             st.error(f"Error searching student: {e}")
 
