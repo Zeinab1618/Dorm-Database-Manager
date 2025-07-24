@@ -1,6 +1,7 @@
 import streamlit as st
 import mysql.connector
 import pandas as pd
+from datetime import datetime
 
 # --- DATABASE CONNECTION ---
 conn = mysql.connector.connect(
@@ -47,21 +48,24 @@ if selected_table == "student":
             weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
             meal_choice = st.selectbox("Meal Choice", ["A", "B"])
             
-            # Mandatory Health Information
-            st.subheader("Health Information")
-            health_desc = st.text_area("Health Description")
-            prescription = st.text_input("Prescription")
-            guardian_contact = st.text_input("Guardian Contact (11 digits)")
+            # Optional Health Information
+            st.subheader("Health Information (Optional)")
+            add_health_info = st.checkbox("Add Health Information")
+            health_desc = st.text_area("Health Description", disabled=not add_health_info)
+            prescription = st.text_input("Prescription", disabled=not add_health_info)
+            guardian_contact = st.text_input("Guardian Contact (11 digits)", disabled=not add_health_info)
             
             submitted = st.form_submit_button("Add Student")
 
             if submitted:
                 # Validate inputs
-                if not student_name or not contact or not health_desc or not prescription or not guardian_contact:
-                    st.error("All fields are mandatory.")
+                if not student_name or not contact:
+                    st.error("Student name and contact are mandatory.")
                 elif len(contact) != 11 or not contact.isdigit():
                     st.error("Contact must be exactly 11 digits.")
-                elif len(guardian_contact) != 11 or not guardian_contact.isdigit():
+                elif add_health_info and (not health_desc or not prescription or not guardian_contact):
+                    st.error("All health fields are required if health information is added.")
+                elif add_health_info and (len(guardian_contact) != 11 or not guardian_contact.isdigit()):
                     st.error("Guardian contact must be exactly 11 digits.")
                 else:
                     cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
@@ -79,13 +83,14 @@ if selected_table == "student":
                                 cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
                                             (student_id, meal_choice, weekday))
                                 
-                                # Insert health issue
-                                cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                            (student_id, health_desc, prescription, guardian_contact))
+                                # Insert health issue if provided
+                                if add_health_info:
+                                    cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                                (student_id, health_desc, prescription, guardian_contact))
                                 
                                 # Insert penalty record with 0 points
-                                cursor.execute("INSERT INTO Penalty (student_id, total_points) VALUES (%s, %s)",
-                                            (student_id, 0))
+                                cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
+                                            (student_id, 0, datetime.now()))
                                 
                                 # Update room occupancy
                                 cursor.execute("""
@@ -97,7 +102,7 @@ if selected_table == "student":
                                 """, (room_id, room_id))
                                 
                                 conn.commit()
-                                st.success("Student, meal, health, and penalty information added. Room occupancy updated.")
+                                st.success("Student, meal, and penalty information added. Health info added if provided. Room occupancy updated.")
                             except mysql.connector.Error as e:
                                 conn.rollback()
                                 st.error(f"MySQL Error: {e}")
@@ -169,7 +174,21 @@ if selected_table == "student":
                     conn.commit()
                     st.success("Health issue updated!")
             else:
-                st.error("Health issue record should exist for every student.")
+                st.info("No health issue found. Add new below:")
+                with st.form("add_health_form"):
+                    desc = st.text_area("Description")
+                    prescription = st.text_input("Prescription")
+                    guardian = st.text_input("Guardian Contact")
+                    if st.form_submit_button("Insert Health Issue"):
+                        if not desc or not prescription or not guardian:
+                            st.error("All health fields are required.")
+                        elif len(guardian) != 11 or not guardian.isdigit():
+                            st.error("Guardian contact must be exactly 11 digits.")
+                        else:
+                            cursor.execute("INSERT INTO health_issues VALUES (%s, %s, %s, %s)",
+                                        (search_id, desc, prescription, guardian))
+                            conn.commit()
+                            st.success("Health issue added!")
         else:
             st.error("Student not found.")
 
@@ -237,10 +256,14 @@ elif selected_table == "Penalty":
     if st.button("Update Penalty"):
         cursor.execute("SELECT id FROM student WHERE id = %s", (student_id,))
         if cursor.fetchone():
-            cursor.execute("REPLACE INTO Penalty (student_id, total_points) VALUES (%s, %s)",
-                        (student_id, points))
-            conn.commit()
-            st.success("Penalty points updated.")
+            try:
+                cursor.execute("REPLACE INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
+                            (student_id, points, datetime.now()))
+                conn.commit()
+                st.success("Penalty points and timestamp updated.")
+            except mysql.connector.Error as e:
+                conn.rollback()
+                st.error(f"MySQL Error: {e}")
         else:
             st.error("Student ID not found.")
 
