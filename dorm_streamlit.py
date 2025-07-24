@@ -101,13 +101,22 @@ elif menu == "Maintenance Requests":
 
 elif menu == "All Tables":
     st.header("View Any Table")
-    table_name = st.text_input("Enter Table Name")
-    if st.button("Show Table"):
+
+    allowed_tables = [
+        "student", "room", "Building", "Meals",
+        "Penalty", "MaintenanceRequest", "health_issues"
+    ]
+    selected_table = st.selectbox("Choose a table to view:", allowed_tables)
+
+    if selected_table:
         try:
-            cursor.execute(f"SELECT * FROM {table_name}")
+            cursor.execute(f"SELECT * FROM {selected_table}")
             data = cursor.fetchall()
-            df = pd.DataFrame(data)
-            st.dataframe(df)
+            if data:
+                df = pd.DataFrame(data)
+                st.dataframe(df)
+            else:
+                st.info("No data found.")
         except Exception as e:
             st.error(f"Error: {e}")
 
