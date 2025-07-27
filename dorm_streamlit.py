@@ -114,39 +114,45 @@ if table_choice == "student":
         if student:
             st.write("Student Info", student)
 
-            cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
-            meal = cursor.fetchone()
-            if meal:
-                new_meal = st.selectbox("Update Meal Type", ["A", "B"], index=["A", "B"].index(meal["meal_type"]))
-                new_day = st.selectbox("Update Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], index=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(meal["weekday"]))
-            else:
-                new_meal = st.selectbox("Update Meal Type", ["A", "B"])
-                new_day = st.selectbox("Update Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+            with st.container():
+                st.markdown("#### Update Meal Preference")
+                cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
+                meal = cursor.fetchone()
+                if meal:
+                    new_meal = st.selectbox("Update Meal Type", ["A", "B"], index=["A", "B"].index(meal["meal_type"]))
+                    new_day = st.selectbox("Update Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], index=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(meal["weekday"]))
+                else:
+                    new_meal = st.selectbox("Update Meal Type", ["A", "B"])
+                    new_day = st.selectbox("Update Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
 
-            if st.button("Update Meal"):
-                cursor.execute("""
-                    INSERT INTO Meals (student_id, meal_type, weekday)
-                    VALUES (%s, %s, %s)
-                    ON DUPLICATE KEY UPDATE meal_type=VALUES(meal_type), weekday=VALUES(weekday)
-                """, (search_id, new_meal, new_day))
-                conn.commit()
-                st.success("Meal updated.")
+                if st.button("Update Meal"):
+                    cursor.execute("""
+                        INSERT INTO Meals (student_id, meal_type, weekday)
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE meal_type=VALUES(meal_type), weekday=VALUES(weekday)
+                    """, (search_id, new_meal, new_day))
+                    conn.commit()
+                    st.success("Meal updated.")
 
-            cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
-            health = cursor.fetchone()
-            if health:
-                desc = st.text_area("Update Health Description", value=health["description"])
-                pres = st.text_input("Update Prescription", value=health["prescription"])
-                guardian = st.text_input("Update Guardian Contact", value=health["guardian_contact"])
-            else:
-                desc = st.text_area("Health Description")
-                pres = st.text_input("Prescription")
-                guardian = st.text_input("Guardian Contact")
+                st.markdown("#### Update Health Info")
+                cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
+                health = cursor.fetchone()
+                if health:
+                    desc = st.text_area("Update Health Description", value=health["description"])
+                    pres = st.text_input("Update Prescription", value=health["prescription"])
+                    guardian = st.text_input("Update Guardian Contact", value=health["guardian_contact"])
+                else:
+                    desc = st.text_area("Health Description")
+                    pres = st.text_input("Prescription")
+                    guardian = st.text_input("Guardian Contact")
 
-            if st.button("Update Health"):
-                cursor.execute("UPDATE health_issues SET description=%s, prescription=%s, guardian_contact=%s WHERE student_id=%s", (desc, pres, guardian, search_id))
-                conn.commit()
-                st.success("Health info updated.")
+                if st.button("Update Health"):
+                    if health:
+                        cursor.execute("UPDATE health_issues SET description=%s, prescription=%s, guardian_contact=%s WHERE student_id=%s", (desc, pres, guardian, search_id))
+                    else:
+                        cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)", (search_id, desc, pres, guardian))
+                    conn.commit()
+                    st.success("Health info updated.")
         else:
             st.warning("Student not found.")
 
