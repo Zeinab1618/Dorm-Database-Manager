@@ -17,6 +17,10 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
+# Initialize session state for search
+if 'search_id' not in st.session_state:
+    st.session_state['search_id'] = None
+
 # ---------------------- Utilities ----------------------
 def load_table(table_name):
     cursor.execute(f"SELECT * FROM {table_name}")
@@ -105,15 +109,14 @@ if table_choice == "student":
                 conn.commit()
                 st.success("Student added with related data.")
 
-    # Search student
-        # Search student
+    # Search student - MODIFIED SECTION WITH FORMS TO PREVENT RELOADS
     st.markdown("### 🔍 Search & Update Student Info")
-    search_id = st.number_input("Enter Student ID to Search", step=1)
+    search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
     
     if st.button("Search Student"):
-        st.session_state['search_id'] = search_id  # Store the ID in session state
+        st.session_state['search_id'] = search_id
     
-    if 'search_id' in st.session_state:
+    if st.session_state['search_id'] is not None:
         search_id = st.session_state['search_id']
         cursor.execute("SELECT * FROM student WHERE id = %s", (search_id,))
         student = cursor.fetchone()
@@ -121,23 +124,21 @@ if table_choice == "student":
         if student:
             st.write("Student Info", student)
 
-            # MEAL UPDATE SECTION
-            cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
-            meal = cursor.fetchone()
-            
-            meal_col, health_col = st.columns(2)
-            
-            with meal_col:
+            # MEAL UPDATE FORM
+            with st.form("meal_form"):
+                cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
+                meal = cursor.fetchone()
+                
                 st.subheader("Meal Information")
                 if meal:
-                    new_meal = st.selectbox("Meal Type", ["A", "B"], index=["A", "B"].index(meal["meal_type"]), key="meal_type")
+                    new_meal = st.selectbox("Meal Type", ["A", "B"], index=["A", "B"].index(meal["meal_type"]))
                     new_day = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], 
-                                        index=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(meal["weekday"]), key="weekday")
+                                        index=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].index(meal["weekday"]))
                 else:
-                    new_meal = st.selectbox("Meal Type", ["A", "B"], key="meal_type_new")
-                    new_day = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="weekday_new")
+                    new_meal = st.selectbox("Meal Type", ["A", "B"])
+                    new_day = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
                 
-                if st.button("Update Meal", key="update_meal"):
+                if st.form_submit_button("Update Meal"):
                     cursor.execute("""
                         INSERT INTO Meals (student_id, meal_type, weekday)
                         VALUES (%s, %s, %s)
@@ -145,24 +146,23 @@ if table_choice == "student":
                     """, (search_id, new_meal, new_day))
                     conn.commit()
                     st.success("Meal updated successfully!")
-                    st.rerun()
 
-            # HEALTH ISSUES SECTION
-            with health_col:
-                st.subheader("Health Information")
+            # HEALTH UPDATE FORM
+            with st.form("health_form"):
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
                 health = cursor.fetchone()
                 
+                st.subheader("Health Information")
                 if health:
-                    desc = st.text_area("Health Description", value=health["description"], key="health_desc")
-                    pres = st.text_input("Prescription", value=health["prescription"], key="prescription")
-                    guardian = st.text_input("Guardian Contact", value=health["guardian_contact"], key="guardian")
+                    desc = st.text_area("Health Description", value=health["description"])
+                    pres = st.text_input("Prescription", value=health["prescription"])
+                    guardian = st.text_input("Guardian Contact", value=health["guardian_contact"])
                 else:
-                    desc = st.text_area("Health Description", key="health_desc_new")
-                    pres = st.text_input("Prescription", key="prescription_new")
-                    guardian = st.text_input("Guardian Contact", key="guardian_new")
+                    desc = st.text_area("Health Description")
+                    pres = st.text_input("Prescription")
+                    guardian = st.text_input("Guardian Contact")
                 
-                if st.button("Update Health Info", key="update_health"):
+                if st.form_submit_button("Update Health Info"):
                     if health:
                         cursor.execute("UPDATE health_issues SET description=%s, prescription=%s, guardian_contact=%s WHERE student_id=%s", 
                                     (desc, pres, guardian, search_id))
@@ -171,53 +171,90 @@ if table_choice == "student":
                                     (search_id, desc, pres, guardian))
                     conn.commit()
                     st.success("Health info updated successfully!")
-                    st.experimental_rerun()
         else:
             st.warning("Student not found.")
 
 # ---------------------- PENALTY TABLE ----------------------
 elif table_choice == "Penalty":
     st.markdown("### ✏️ Update Penalty")
-    pid = st.number_input("Student ID", step=1)
-    points = st.number_input("New Total Points", step=1)
-    if st.button("Update Penalty"):
-        cursor.execute("UPDATE Penalty SET total_points = %s, last_updated = %s WHERE student_id = %s", (points, now, pid))
-        conn.commit()
-        st.success("Penalty updated.")
+    
+    # Initialize session state for penalty
+    if 'penalty_id' not in st.session_state:
+        st.session_state['penalty_id'] = None
+    
+    pid = st.number_input("Student ID", step=1, key="penalty_input")
+    
+    if st.button("Search Penalty Record"):
+        st.session_state['penalty_id'] = pid
+    
+    if st.session_state['penalty_id'] is not None:
+        pid = st.session_state['penalty_id']
+        cursor.execute("SELECT * FROM Penalty WHERE student_id = %s", (pid,))
+        penalty = cursor.fetchone()
+        
+        if penalty:
+            st.write("Current Penalty Info", penalty)
+            
+            with st.form("penalty_form"):
+                points = st.number_input("New Total Points", step=1, value=penalty["total_points"])
+                
+                if st.form_submit_button("Update Penalty"):
+                    cursor.execute("UPDATE Penalty SET total_points = %s, last_updated = %s WHERE student_id = %s", 
+                                 (points, now, pid))
+                    conn.commit()
+                    st.success("Penalty updated successfully!")
+        else:
+            st.warning("No penalty record found for this student ID.")
 
 # ---------------------- MAINTENANCE TABLE ----------------------
 elif table_choice == "MaintenanceRequest":
+    # Initialize session state for maintenance
+    if 'maintenance_id' not in st.session_state:
+        st.session_state['maintenance_id'] = None
+    
+    # Update Request Section
     st.markdown("### 🛠️ Update Request")
+    req_id = st.number_input("Maintenance Request ID to Update", step=1, key="update_req_id")
+    
+    if st.button("Search Maintenance Request"):
+        st.session_state['maintenance_id'] = req_id
+    
+    if st.session_state['maintenance_id'] is not None:
+        req_id = st.session_state['maintenance_id']
+        cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
+        request = cursor.fetchone()
 
-    req_id = st.number_input("Maintenance Request ID to Update", step=1)
-    cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
-    request = cursor.fetchone()
+        if request:
+            st.write("Current Request Info", request)
+            
+            with st.form("update_request_form"):
+                new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], 
+                                        index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
+                new_description = st.text_area("Update Description", value=request['description'])
+                
+                if st.form_submit_button("Update Request"):
+                    cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", 
+                                 (new_status, new_description, req_id))
+                    conn.commit()
+                    st.success("Maintenance request updated successfully!")
+        else:
+            st.info("No maintenance request found with that ID.")
 
-    if request:
-        new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
-        new_description = st.text_area("Update Description", value=request['description'])
-
-        if st.button("Update Request"):
-            cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", (new_status, new_description, req_id))
-            conn.commit()
-            st.success("Maintenance request updated.")
-    else:
-        st.info("No maintenance request found with that ID.")
-
+    # Add New Request Section
     st.markdown("---")
     st.markdown("### ➕ Add New Maintenance Request")
-
-    new_desc = st.text_area("Description")
-    new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
-    request_id = st.number_input("Request ID", step=1, key="add_sid")
-    room_id = st.number_input("Room ID", step=1, key="add_room_id") 
-
-    if st.button("Add Request"):
-        cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", (request_id, room_id, new_desc, new_stat))
-        conn.commit()
-        st.success("New maintenance request added.")
-
-
+    
+    with st.form("add_request_form"):
+        new_desc = st.text_area("Description")
+        new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'])
+        request_id = st.number_input("Request ID", step=1)
+        room_id = st.number_input("Room ID", step=1)
+        
+        if st.form_submit_button("Add Request"):
+            cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
+                         (request_id, room_id, new_desc, new_stat))
+            conn.commit()
+            st.success("New maintenance request added successfully!")
 
 cursor.close()
 conn.close()
