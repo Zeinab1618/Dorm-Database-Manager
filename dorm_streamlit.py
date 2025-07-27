@@ -76,48 +76,48 @@ if table_choice == "student":
     st.markdown("### ✨ Add Student")
     with st.expander("➕ Add Student"):
         sid = st.number_input("Student ID", step=1)
-    name = st.text_input("Student Name")
-    contact = st.text_input("Contact Number")
+        name = st.text_input("Student Name")
+        contact = st.text_input("Contact Number")
+        
+        # Add validation warnings
+        if isinstance(sid, str) and not sid.isdigit():
+            st.warning("Student ID must contain only numbers")
+        if contact and not contact.isdigit():
+            st.warning("Contact number must contain only numbers")
     
-    # Add validation warnings
-    if isinstance(sid, str) and not sid.isdigit():
-        st.warning("Student ID must contain only numbers")
-    if contact and not contact.isdigit():
-        st.warning("Contact number must contain only numbers")
-
-    room_list = get_available_rooms()
-    room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
-    room_choice = st.selectbox("Select Room", room_display)
-    selected_room = room_list[room_display.index(room_choice)]
-    room_id = selected_room['id']
-    free_slots = selected_room['capacity'] - selected_room['current_occupancy']
-
-    if free_slots <= 0:
-        st.warning("❌ This room is full. Choose a different room.")
-
-    meal_type = st.selectbox("Meal Type", ["A", "B"])
-    weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-    health_desc = st.text_area("Health Description (Optional)")
-    prescription = st.text_input("Prescription (Optional)")
-    guardian = st.text_input("Guardian Contact (Optional)")
-
-    if st.button("Add Student"):
+        room_list = get_available_rooms()
+        room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
+        room_choice = st.selectbox("Select Room", room_display)
+        selected_room = room_list[room_display.index(room_choice)]
+        room_id = selected_room['id']
+        free_slots = selected_room['capacity'] - selected_room['current_occupancy']
+    
         if free_slots <= 0:
-            st.error("Room is full! Cannot add student.")
-        elif isinstance(sid, str) and not sid.isdigit():
-            st.error("Invalid Student ID - must be numbers only")
-        elif contact and not contact.isdigit():
-            st.error("Invalid Contact Number - must be numbers only")
-        else:
-            cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
-            cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
-            cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", (sid, now))
-            if health_desc and prescription and guardian:
-                cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                            (sid, health_desc, prescription, guardian))
-            update_room_occupancy(room_id)
-            conn.commit()
-            st.success("Student added with related data.")
+            st.warning("❌ This room is full. Choose a different room.")
+    
+        meal_type = st.selectbox("Meal Type", ["A", "B"])
+        weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+        health_desc = st.text_area("Health Description (Optional)")
+        prescription = st.text_input("Prescription (Optional)")
+        guardian = st.text_input("Guardian Contact (Optional)")
+    
+        if st.button("Add Student"):
+            if free_slots <= 0:
+                st.error("Room is full! Cannot add student.")
+            elif isinstance(sid, str) and not sid.isdigit():
+                st.error("Invalid Student ID - must be numbers only")
+            elif contact and not contact.isdigit():
+                st.error("Invalid Contact Number - must be numbers only")
+            else:
+                cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
+                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
+                cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", (sid, now))
+                if health_desc and prescription and guardian:
+                    cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                (sid, health_desc, prescription, guardian))
+                update_room_occupancy(room_id)
+                conn.commit()
+                st.success("Student added with related data.")
                     
     # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
