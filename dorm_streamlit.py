@@ -145,7 +145,7 @@ if table_choice == "student":
                     """, (search_id, new_meal, new_day))
                     conn.commit()
                     st.success("Meal updated successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
 
             # HEALTH ISSUES SECTION
             with health_col:
