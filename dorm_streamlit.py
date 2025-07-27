@@ -245,16 +245,36 @@ elif table_choice == "MaintenanceRequest":
     st.markdown("### ➕ Add New Maintenance Request")
     
     with st.form("add_request_form"):
-        new_desc = st.text_area("Description")
-        new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'])
-        request_id = st.number_input("Request ID", step=1)
-        room_id = st.number_input("Room ID", step=1)
+        request_id = st.number_input("Request ID", step=1, key="add_request_id")
+        room_id = st.number_input("Room ID", step=1, key="add_room_id")
+        new_desc = st.text_area("Description", key="add_desc")
+        new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
         
         if st.form_submit_button("Add Request"):
-            cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
-                         (request_id, room_id, new_desc, new_stat))
-            conn.commit()
-            st.success("New maintenance request added successfully!")
+            try:
+                # First check if room exists
+                cursor.execute("SELECT id FROM room WHERE id = %s", (room_id,))
+                if not cursor.fetchone():
+                    st.error(f"Room ID {room_id} doesn't exist!")
+                    return
+                
+                # Check if request ID already exists
+                cursor.execute("SELECT id FROM MaintenanceRequest WHERE id = %s", (request_id,))
+                if cursor.fetchone():
+                    st.error(f"Request ID {request_id} already exists!")
+                    return
+                
+                # If checks pass, insert the record
+                cursor.execute(
+                    "INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
+                    (request_id, room_id, new_desc, new_stat)
+                )
+                conn.commit()
+                st.success("New maintenance request added successfully!")
+            except mysql.connector.Error as err:
+                st.error(f"Database error: {err.msg}")
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
 
 cursor.close()
 conn.close()
