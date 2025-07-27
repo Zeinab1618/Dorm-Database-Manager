@@ -107,7 +107,6 @@ if table_choice == "student":
                 update_room_occupancy(room_id)
                 conn.commit()
                 st.success("Student added with related data.")
-
     # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
     search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
