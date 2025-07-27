@@ -156,7 +156,7 @@ if selected_table == "student":
                             st.success("Meal preference updated successfully")
                             st.experimental_rerun()
                         except mysql.connector.Error as e:
-                            conn.rollback()
+                            #conn.rollback()
                             st.error(f"Error updating meal: {e}")
                 
                 # --- HEALTH INFORMATION ---
