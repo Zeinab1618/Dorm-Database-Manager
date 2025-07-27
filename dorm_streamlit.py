@@ -57,10 +57,14 @@ if table != "None":
             weekday_update = st.selectbox("Weekday to Update", ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], key="update")
             meal_update = st.selectbox("New Meal Choice", ["A", "B"], key="meal")
             if st.button("Submit Meal Update"):
-                cursor.execute("REPLACE INTO Meals (student_id, weekday, meal_choice) VALUES (%s, %s, %s)", (search_id, weekday_update, meal_update))
+                cursor.execute("SELECT * FROM Meals WHERE student_id = %s AND weekday = %s", (search_id, weekday_update))
+                if cursor.fetchone():
+                    cursor.execute("UPDATE Meals SET meal_choice = %s WHERE student_id = %s AND weekday = %s", (meal_update, search_id, weekday_update))
+                else:
+                    cursor.execute("INSERT INTO Meals (student_id, weekday, meal_choice) VALUES (%s, %s, %s)",(search_id, weekday_update, meal_update))
                 conn.commit()
                 st.success("Meal updated successfully")
-
+                                   
             st.subheader("Update Health Issue")
             new_prescription = st.text_area("New Prescription")
             new_description = st.text_area("New Description")
