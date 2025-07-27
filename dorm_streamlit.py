@@ -115,7 +115,7 @@ if selected_table == "student":
 
     # --- SEARCH & EDIT STUDENT ---
     st.subheader("🔍 Search Student")
-    search_id = st.number_input("Search Student by ID", step=1, min_value=1)
+    search_id = st.number_input("Search Student by ID", step=1, key="search", min_value=1)
     
     if st.button("Search"):
         try:
@@ -126,40 +126,34 @@ if selected_table == "student":
             if student:
                 st.json(student)
                 
-                # --- MEAL MANAGEMENT ---
-                # --- MEAL MANAGEMENT ---
-                st.subheader("🍽️ Meal Preferences")
-                
-                # Get all meal preferences for the student
-                cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
-                meals = cursor.fetchall()
-                
-                if meals:
-                    st.write("Current Meal Preferences:")
-                    st.dataframe(pd.DataFrame(meals))
-                else:
-                    st.info("No meal preferences found for this student.")
-                
-                # Form to change meal preference
-                with st.form("meal_form"):
-                    st.write("Change Meal Preference")
-                    weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-                    meal_type = st.selectbox("Meal Type", ["A", "B"])
-                    
-                    if st.form_submit_button("Change Meal"):
+                st.subheader("✏️ Change Meal")
+                # Fetch current meal info if available
+                cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
+                current_meal = cursor.fetchone()
+                current_weekday = current_meal['weekday'] if current_meal else "Sunday"
+                current_meal_type = current_meal['meal_type'] if current_meal else "A"
+
+                with st.form("update_meal_form"):
+                    weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], 
+                                         index=["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"].index(current_weekday))
+                    meal_type = st.selectbox("Meal Type", ["A", "B"], 
+                                           index=["A", "B"].index(current_meal_type) if current_meal_type in ["A", "B"] else 0)
+                    meal_submitted = st.form_submit_button("Update Meal")
+
+                    if meal_submitted:
                         try:
-                            # Replace meal preference in Meals table
+                            # Use REPLACE instead of UPDATE/INSERT to handle both cases
                             cursor.execute("""
-                                REPLACE INTO Meals (student_id, meal_type, weekday)
+                                REPLACE INTO Meals (student_id, weekday, meal_type)
                                 VALUES (%s, %s, %s)
-                            """, (search_id, meal_type, weekday))
+                            """, (search_id, weekday, meal_type))
+                            
                             conn.commit()
-                            st.success(f"Meal preference changed for {weekday}!")
-                            st.experimental_rerun()
+                            st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
                         except mysql.connector.Error as e:
                             conn.rollback()
-                            st.error(f"Error changing meal: {e}")
-                
+                            st.error(f"Error updating meal: {e}")
+
                 # --- HEALTH INFORMATION ---
                 st.subheader("🏥 Health Information")
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
@@ -206,7 +200,7 @@ if selected_table == "student":
                                     st.success("Health information added!")
                                 except mysql.connector.Error as e:
                                     conn.rollback()
-                                    st.error(f"Error adding health info: {e}")
+                                    U st.error(f"Error adding health info: {e}")
             
             else:
                 st.error("Student not found.")
