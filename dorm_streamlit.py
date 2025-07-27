@@ -32,12 +32,15 @@ def get_available_rooms():
     return cursor.fetchall()
 
 # ---------------------- Table Choice ----------------------
-all_tables = ["Select", "student", "penalty", "MaintenanceRequest", "Meals", "room", "building", "health_issues"]
+all_tables = ["Select", "student", "penalty", "MaintenanceRequest", "Meals", "room", "Building", "health_issues"]
 table_choice = st.selectbox("Select Table to View", all_tables)
 
 if table_choice != "Select":
     st.subheader(f"{table_choice} Table")
-    st.dataframe(load_table(table_choice))
+    if st.button("🔄 Reload Table"):
+        st.dataframe(load_table(table_choice))
+    else:
+        st.dataframe(load_table(table_choice))
 
 # ---------------------- STUDENT TABLE ----------------------
 if table_choice == "student":
@@ -61,6 +64,7 @@ if table_choice == "student":
             st.warning("Student ID not found.")
 
     # Add student
+    st.markdown("### ✨ Add Student")
     with st.expander("➕ Add Student"):
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
