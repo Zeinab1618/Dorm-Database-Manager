@@ -73,12 +73,15 @@ if table_choice == "student":
             st.warning("Student ID not found.")
 
     # Add student
-    st.markdown("### ✨ Add Student")
-    with st.expander("➕ Add Student"):
+    # Add student
+st.markdown("### ✨ Add Student")
+with st.expander("➕ Add Student"):
+    with st.form("add_student_form"):
         sid = st.number_input("Student ID", step=1)
         name = st.text_input("Student Name")
         contact = st.text_input("Contact Number")
 
+        # Room selection (outside form to allow dynamic updates)
         room_list = get_available_rooms()
         room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
         room_choice = st.selectbox("Select Room", room_display)
@@ -95,7 +98,7 @@ if table_choice == "student":
         prescription = st.text_input("Prescription (Optional)")
         guardian = st.text_input("Guardian Contact (Optional)")
 
-        if st.button("Add Student"):
+        if st.form_submit_button("Add Student"):
             if free_slots <= 0:
                 st.error("Room is full! Cannot add student.")
             else:
@@ -108,8 +111,9 @@ if table_choice == "student":
                 update_room_occupancy(room_id)
                 conn.commit()
                 st.success("Student added with related data.")
+                st.rerun() 
 
-    # Search student - MODIFIED SECTION WITH FORMS TO PREVENT RELOADS
+    # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
     search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
     
@@ -147,7 +151,7 @@ if table_choice == "student":
                     conn.commit()
                     st.success("Meal updated successfully!")
 
-            # HEALTH UPDATE FORM
+            # health update form
             with st.form("health_form"):
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
                 health = cursor.fetchone()
@@ -242,7 +246,7 @@ elif table_choice == "MaintenanceRequest":
                                  (new_status, new_description, st.session_state.search_maintenance_id))
                     conn.commit()
                     st.success("Maintenance request updated successfully!")
-                    st.session_state.search_maintenance_id = None  # Reset after update
+                    st.session_state.search_maintenance_id = None 
         elif st.session_state.show_not_found:
             st.info("No maintenance request found with that ID.")
 
