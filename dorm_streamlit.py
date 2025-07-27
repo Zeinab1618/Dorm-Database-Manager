@@ -73,57 +73,58 @@ if table_choice == "student":
 
     # Add student
     st.markdown("### ✨ Add Student")
-with st.expander("➕ Add Student"):
-    with st.form("add_student_form"):
-        sid = st.text_input("Student ID", key="student_id_input")
-        if sid and not sid.isdigit():
-            st.error("Student ID must contain only numbers (0-9)")
-        
-        contact = st.text_input("Contact Number", key="contact_input")
-        if contact and not contact.isdigit():
-            st.error("Contact number must contain only numbers (0-9)")
+    with st.expander("➕ Add Student"):
+        with st.form("add_student_form"):
+            sid = st.text_input("Student ID", key="student_id_input")
+            if sid and not sid.isdigit():
+                st.error("Student ID must contain only numbers (0-9)")
+            
+            contact = st.text_input("Contact Number", key="contact_input")
+            if contact and not contact.isdigit():
+                st.error("Contact number must contain only numbers (0-9)")
 
-        room_list = get_available_rooms()
-        room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
-        room_choice = st.selectbox("Select Room", room_display)
-        selected_room = room_list[room_display.index(room_choice)]
-        room_id = selected_room['id']
-        free_slots = selected_room['capacity'] - selected_room['current_occupancy']
+            room_list = get_available_rooms()
+            room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
+            room_choice = st.selectbox("Select Room", room_display)
+            selected_room = room_list[room_display.index(room_choice)]
+            room_id = selected_room['id']
+            free_slots = selected_room['capacity'] - selected_room['current_occupancy']
 
-        if free_slots <= 0:
-            st.warning("❌ This room is full. Choose a different room.")
+            if free_slots <= 0:
+                st.warning("❌ This room is full. Choose a different room.")
 
-        meal_type = st.selectbox("Meal Type", ["A", "B"])
-        weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-        health_desc = st.text_area("Health Description (Optional)")
-        prescription = st.text_input("Prescription (Optional)")
-        guardian = st.text_input("Guardian Contact (Optional)")
+            meal_type = st.selectbox("Meal Type", ["A", "B"])
+            weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+            health_desc = st.text_area("Health Description (Optional)")
+            prescription = st.text_input("Prescription (Optional)")
+            guardian = st.text_input("Guardian Contact (Optional)")
 
-        if st.form_submit_button("Add Student"):
-            if not sid or not sid.isdigit():
-                st.error("Please enter a valid Student ID (numbers only)")
-            elif not contact or not contact.isdigit():
-                st.error("Please enter a valid Contact Number (numbers only)")
-            elif free_slots <= 0:
-                st.error("Room is full! Cannot add student.")
-            else:
-                sid_int = int(sid)
-                contact_str = str(contact)
-                
-                cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", 
-                             (sid_int, name, contact_str, room_id))
-                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", 
-                             (sid_int, meal_type, weekday))
-                cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", 
-                             (sid_int, now))
-                
-                if health_desc or prescription or guardian:
-                    cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                (sid_int, health_desc, prescription, guardian))
-                
-                update_room_occupancy(room_id)
-                conn.commit()
-                st.success("Student added with related data.")
+            if st.form_submit_button("Add Student"):
+                if not sid or not sid.isdigit():
+                    st.error("Please enter a valid Student ID (numbers only)")
+                elif not contact or not contact.isdigit():
+                    st.error("Please enter a valid Contact Number (numbers only)")
+                elif free_slots <= 0:
+                    st.error("Room is full! Cannot add student.")
+                else:
+                    sid_int = int(sid)
+                    contact_str = str(contact)
+                    
+                    cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", 
+                                (sid_int, name, contact_str, room_id))
+                    cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", 
+                                (sid_int, meal_type, weekday))
+                    cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", 
+                                (sid_int, now))
+                    
+                    if health_desc or prescription or guardian:
+                        cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                    (sid_int, health_desc or None, prescription or None, guardian or None))
+                    
+                    update_room_occupancy(room_id)
+                    conn.commit()
+                    st.success("Student added with related data.")
+                    
     # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
     search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
