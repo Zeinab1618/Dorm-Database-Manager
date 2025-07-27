@@ -314,4 +314,4 @@ elif selected_table == "Penalty":
 
 # --- CLOSE DB ---
 cursor.close()
-conn.close() this code is perfect there are slight changes i want 1. when searching for a student and info appear i try to use update meal option for that student but it doesn't update in the meal table
+conn.close() 
