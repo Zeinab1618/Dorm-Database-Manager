@@ -26,9 +26,9 @@ cursor.execute("SHOW TABLES")
 tables = [row[f'Tables_in_{st.secrets["mysql"]["database"]}'] for row in cursor.fetchall()]
 valid_tables = ["Building", "room", "student", "MaintenanceRequest", "Penalty", "Meals", "health_issues"]
 tables = [t for t in tables if t in valid_tables]
-selected_table = st.selectbox("Select a table to view:", tables)
+selected_table = st.selectbox("Select a table to view:", tables, key="view_table_select")
 
-if st.button("Show Table"):
+if st.button("Show Table", key="show_table_button"):
     cursor.execute(f"SELECT * FROM {selected_table}")
     rows = cursor.fetchall()
     if rows:
@@ -44,22 +44,22 @@ if selected_table == "student":
     # --- ADD STUDENT ---
     with st.expander("➕ Add New Student"):
         with st.form("add_student_form"):
-            student_id = st.number_input("Student ID", step=1, min_value=1)
-            student_name = st.text_input("Name")
-            contact = st.text_input("Contact (11 digits)")
-            room_id = st.number_input("Room ID", step=1, min_value=1)
+            student_id = st.number_input("Student ID", step=1, min_value=1, key="add_student_id")
+            student_name = st.text_input("Name", key="add_student_name")
+            contact = st.text_input("Contact (11 digits)", key="add_student_contact")
+            room_id = st.number_input("Room ID", step=1, min_value=1, key="add_room_id")
             
             st.subheader("Meal Information")
-            weekday = st.selectbox("Weekday for Meal", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
-            meal_type = st.selectbox("Meal Type", ["A", "B"])
+            weekday = st.selectbox("Weekday for Meal", ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], key="add_meal_weekday")
+            meal_type = st.selectbox("Meal Type", ["A", "B"], key="add_meal_type")
             
             st.subheader("Health Information (Optional)")
-            add_health_info = st.checkbox("Add Health Information")
-            health_desc = st.text_area("Health Description", disabled=not add_health_info)
-            prescription = st.text_input("Prescription", disabled=not add_health_info)
-            guardian_contact = st.text_input("Guardian Contact (11 digits)", disabled=not add_health_info)
+            add_health_info = st.checkbox("Add Health Information", key="add_health_check")
+            health_desc = st.text_area("Health Description", disabled=not add_health_info, key="add_health_desc")
+            prescription = st.text_input("Prescription", disabled=not add_health_info, key="add_health_prescription")
+            guardian_contact = st.text_input("Guardian Contact (11 digits)", disabled=not add_health_info, key="add_health_guardian")
             
-            submitted = st.form_submit_button("Add Student")
+            submitted = st.form_submit_button("Add Student", key="add_student_submit")
 
             if submitted:
                 if len(contact) != 11 or not contact.isdigit():
@@ -69,7 +69,7 @@ if selected_table == "student":
                 elif add_health_info and (len(guardian_contact) != 11 or not guardian_contact.isdigit()):
                     st.error("Guardian contact must be exactly 11 digits.")
                 else:
-                    cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (room_id,))
+                    cursor.execute("SELECT capacity, current_occupancy FROM room WHERE id = %s", (int(room_id),))
                     room = cursor.fetchone()
                     if room:
                         if room["current_occupancy"] >= room["capacity"]:
@@ -78,23 +78,23 @@ if selected_table == "student":
                             try:
                                 # Insert student
                                 cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
-                                              (student_id, student_name, contact, room_id))
+                                              (int(student_id), student_name, contact, int(room_id)))
                                 
                                 # Insert meal using ON DUPLICATE KEY UPDATE
                                 cursor.execute("""
                                     INSERT INTO Meals (student_id, meal_type, weekday)
                                     VALUES (%s, %s, %s)
                                     ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
-                                """, (student_id, meal_type, weekday))
+                                """, (int(student_id), meal_type, weekday))
                                 
                                 # Insert health issue if provided
                                 if add_health_info:
                                     cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                                  (student_id, health_desc, prescription, guardian_contact))
+                                                  (int(student_id), health_desc, prescription, guardian_contact))
                                 
                                 # Insert penalty record
                                 cursor.execute("INSERT INTO Penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
-                                              (student_id, 0, datetime.now(eest)))
+                                              (int(student_id), 0, datetime.now(eest)))
                                 
                                 # Update room occupancy
                                 cursor.execute("""
@@ -103,7 +103,7 @@ if selected_table == "student":
                                         SELECT COUNT(*) FROM student WHERE room_id = %s
                                     )
                                     WHERE id = %s
-                                """, (room_id, room_id))
+                                """, (int(room_id), int(room_id)))
                                 
                                 conn.commit()
                                 st.success("Student added successfully!")
@@ -139,22 +139,20 @@ if selected_table == "student":
                 else:
                     st.info("No meal preferences found for this student.")
                 
-                with st.form("update_meal_form_unique"):
+                with st.form("update_meal_form"):
                     st.write("Update or Add Meal Preference")
                     weekday_update = st.selectbox("Weekday to Update", 
                                                   ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-                                                  key="meal_weekday")
-                    meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal_type")
+                                                  key="meal_weekday_update")
+                    meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal_type_update")
                     
-                    meal_submitted = st.form_submit_button("Submit Meal Update", key="submit_meal_update")
+                    meal_submitted = st.form_submit_button("Submit Meal Update", key="meal_submit")
                     
                     if meal_submitted:
                         st.write("Debug: Meal update form submitted")  # Debug output
                         try:
-                            # Ensure search_id is an integer
                             student_id = int(search_id)
                             st.write(f"Debug: Executing query for student_id={student_id}, weekday={weekday_update}, meal_type={meal_update}")  # Debug output
-                            # Using ON DUPLICATE KEY UPDATE for proper meal updates
                             cursor.execute("""
                                 INSERT INTO Meals (student_id, weekday, meal_type)
                                 VALUES (%s, %s, %s)
@@ -181,7 +179,7 @@ if selected_table == "student":
                         prescription = st.text_input("Prescription", health['prescription'], key="health_prescription")
                         guardian = st.text_input("Guardian Contact", health['guardian_contact'], key="health_guardian")
                         
-                        if st.form_submit_button("Update Health Info", key="update_health"):
+                        if st.form_submit_button("Update Health Info", key="health_submit"):
                             try:
                                 cursor.execute("""
                                     UPDATE health_issues 
@@ -248,7 +246,7 @@ if selected_table == "student":
                         SELECT COUNT(*) FROM student WHERE room_id = %s
                     )
                     WHERE id = %s
-                """, (room_id, room_id))
+                """, (int(room_id), int(room_id)))
                 
                 conn.commit()
                 st.success("Student and all related records deleted successfully!")
