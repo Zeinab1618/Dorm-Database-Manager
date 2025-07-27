@@ -179,7 +179,7 @@ with st.expander("➕ Add Student"):
             st.warning("Student not found.")
 
 # ---------------------- PENALTY TABLE ----------------------
-elif table_choice == "Penalty":
+ elif table_choice == "Penalty":
     st.markdown("### ✏️ Update Penalty")
     
     # Initialize session state for penalty
