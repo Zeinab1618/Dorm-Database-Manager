@@ -82,32 +82,37 @@ if table_choice == "student":
         # Add validation warnings
         if isinstance(sid, str) and not sid.isdigit():
             st.warning("Student ID must contain only numbers")
-        if contact and not contact.isdigit():
-            st.warning("Contact number must contain only numbers")
-    
+        if contact:
+            if not contact.isdigit():
+                st.warning("Contact number must contain only numbers")
+            elif len(contact) > 11:
+                st.warning("Contact number should not exceed 11 digits")
+
         room_list = get_available_rooms()
         room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
         room_choice = st.selectbox("Select Room", room_display)
         selected_room = room_list[room_display.index(room_choice)]
         room_id = selected_room['id']
         free_slots = selected_room['capacity'] - selected_room['current_occupancy']
-    
+
         if free_slots <= 0:
             st.warning("❌ This room is full. Choose a different room.")
-    
+
         meal_type = st.selectbox("Meal Type", ["A", "B"])
         weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
         health_desc = st.text_area("Health Description (Optional)")
         prescription = st.text_input("Prescription (Optional)")
         guardian = st.text_input("Guardian Contact (Optional)")
-    
+
         if st.button("Add Student"):
             if free_slots <= 0:
                 st.error("Room is full! Cannot add student.")
             elif isinstance(sid, str) and not sid.isdigit():
                 st.error("Invalid Student ID - must be numbers only")
-            elif contact and not contact.isdigit():
+            elif not contact.isdigit():
                 st.error("Invalid Contact Number - must be numbers only")
+            elif len(contact) > 11:
+                st.error("Contact number cannot exceed 11 digits")
             else:
                 cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
                 cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
