@@ -209,11 +209,11 @@ elif table_choice == "MaintenanceRequest":
 
     new_desc = st.text_area("Description")
     new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
-    student_id = st.number_input("Request ID", step=1, key="add_sid")
+    request_id = st.number_input("Request ID", step=1, key="add_sid")
     room_id = st.number_input("Room ID", step=1, key="add_room_id") 
 
     if st.button("Add Request"):
-        cursor.execute("INSERT INTO MaintenanceRequest (student_id, room_id, description, statues) VALUES (%s, %s, %s, %s)", (student_id, room_id, new_desc, new_stat))
+        cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", (request_id, room_id, new_desc, new_stat))
         conn.commit()
         st.success("New maintenance request added.")
 
