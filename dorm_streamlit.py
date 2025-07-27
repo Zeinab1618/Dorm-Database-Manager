@@ -251,7 +251,7 @@ elif table_choice == "MaintenanceRequest":
         room_id = st.number_input("Room ID", step=1)
         
         if st.form_submit_button("Add Request"):
-            cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, status) VALUES (%s, %s, %s, %s)", 
+            cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
                          (request_id, room_id, new_desc, new_stat))
             conn.commit()
             st.success("New maintenance request added successfully!")
