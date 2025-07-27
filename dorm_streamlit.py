@@ -208,35 +208,62 @@ elif table_choice == "Penalty":
 
 # ---------------------- MAINTENANCE TABLE ----------------------
 elif table_choice == "MaintenanceRequest":
+    # Initialize session states
+    if 'search_maintenance_id' not in st.session_state:
+        st.session_state.search_maintenance_id = None
+    if 'show_not_found' not in st.session_state:
+        st.session_state.show_not_found = False
+
+    # Update Request Section
     st.markdown("### 🛠️ Update Request")
+    req_id = st.number_input("Maintenance Request ID to Update", step=1, key="update_req_input")
+    
+    if st.button("Search Request", key="search_req_btn"):
+        st.session_state.search_maintenance_id = req_id
+        st.session_state.show_not_found = True  # Only show "not found" after search
+        
+        # Reset not found message if searching again
+        cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
+        if cursor.fetchone():
+            st.session_state.show_not_found = False
 
-    req_id = st.number_input("Maintenance Request ID to Update", step=1)
-    cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
-    request = cursor.fetchone()
+    if st.session_state.search_maintenance_id is not None:
+        cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (st.session_state.search_maintenance_id,))
+        request = cursor.fetchone()
 
-    if request:
-        new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
-        new_description = st.text_area("Update Description", value=request['description'])
+        if request:
+            with st.form("update_request_form"):
+                new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], 
+                                        index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
+                new_description = st.text_area("Update Description", value=request['description'])
+                
+                if st.form_submit_button("Update Request"):
+                    cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", 
+                                 (new_status, new_description, st.session_state.search_maintenance_id))
+                    conn.commit()
+                    st.success("Maintenance request updated successfully!")
+                    st.session_state.search_maintenance_id = None  # Reset after update
+        elif st.session_state.show_not_found:
+            st.info("No maintenance request found with that ID.")
 
-        if st.button("Update Request"):
-            cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", (new_status, new_description, req_id))
-            conn.commit()
-            st.success("Maintenance request updated.")
-    else:
-        st.info("No maintenance request found with that ID.")
-
+    # Add New Request Section
     st.markdown("---")
     st.markdown("### ➕ Add New Maintenance Request")
-
-    new_desc = st.text_area("Description")
-    new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
-    request_id = st.number_input("Request ID", step=1, key="add_sid")
-    room_id = st.number_input("Room ID", step=1, key="add_room_id") 
-
-    if st.button("Add Request"):
-        cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", (request_id, room_id, new_desc, new_stat))
-        conn.commit()
-        st.success("New maintenance request added.")
+    
+    with st.form("add_request_form"):
+        new_desc = st.text_area("Description", key="add_desc")
+        new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
+        request_id = st.number_input("Request ID", step=1, key="add_sid")
+        room_id = st.number_input("Room ID", step=1, key="add_room_id") 
+        
+        if st.form_submit_button("Add Request"):
+            try:
+                cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
+                             (request_id, room_id, new_desc, new_stat))
+                conn.commit()
+                st.success("New maintenance request added successfully!")
+            except mysql.connector.Error as err:
+                st.error(f"Error adding request: {err}")
 
 cursor.close()
 conn.close()
