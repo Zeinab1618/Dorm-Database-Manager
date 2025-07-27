@@ -115,7 +115,7 @@ if selected_table == "student":
 
     # --- SEARCH & EDIT STUDENT ---
     st.subheader("🔍 Search Student")
-    search_id = st.number_input("Search Student by ID", step=1, key="search_student", min_value=1)
+    search_id = st.number_input("Search Student by ID", step=1, min_value=1)
     
     if st.button("Search"):
         try:
@@ -124,13 +124,13 @@ if selected_table == "student":
             student = cursor.fetchone()
             
             if student:
-                st.subheader("Student Information")
                 st.json(student)
                 
                 # --- MEAL MANAGEMENT ---
                 st.subheader("🍽️ Meal Preferences")
-                # Fetch all meal preferences for the student
-                cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
+                
+                # Get all meal preferences for the student
+                cursor.execute("SELECT * FROM Meals WHERE student_id = %s", (search_id,))
                 meals = cursor.fetchall()
                 
                 if meals:
@@ -139,47 +139,26 @@ if selected_table == "student":
                 else:
                     st.info("No meal preferences found for this student.")
                 
-                # Form to update or add meal preference
-                with st.form("update_meal_form_unique"):
-                    st.write("Update or Add Meal Preference")
+                # Form to add/update meal preference
+                with st.form("meal_form"):
+                    st.write("Add/Update Meal Preference")
                     weekday = st.selectbox("Weekday", ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"])
                     meal_type = st.selectbox("Meal Type", ["A", "B"])
-                    meal_submitted = st.form_submit_button("Update Meal")
-
-                    if meal_submitted:
-                        st.write("Debug: Form submitted")  # Debug output
+                    
+                    if st.form_submit_button("Update Meal"):
                         try:
-                            # Check if a meal record exists for the student and weekday
-                            cursor.execute("SELECT COUNT(*) as count FROM Meals WHERE student_id = %s AND weekday = %s", 
-                                          (search_id, weekday))
-                            meal_exists = cursor.fetchone()['count'] > 0
-                            st.write(f"Debug: Meal exists for {weekday}: {meal_exists}")  # Debug output
-
-                            if meal_exists:
-                                # Update existing meal record
-                                cursor.execute("""
-                                    UPDATE Meals 
-                                    SET meal_type = %s
-                                    WHERE student_id = %s AND weekday = %s
-                                """, (meal_type, search_id, weekday))
-                                st.write("Debug: UPDATE query executed")  # Debug output
-                                conn.commit()
-                                st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
-                            else:
-                                # Insert new meal record
-                                cursor.execute("""
-                                    INSERT INTO Meals (student_id, weekday, meal_type)
-                                    VALUES (%s, %s, %s)
-                                """, (search_id, weekday, meal_type))
-                                st.write("Debug: INSERT query executed")  # Debug output
-                                conn.commit()
-                                st.success(f"Meal preference added for {weekday} with meal type {meal_type}!")
-                            st.experimental_rerun()  # Refresh to show updated data
+                            cursor.execute("""
+                                INSERT INTO Meals (student_id, meal_type, weekday)
+                                VALUES (%s, %s, %s)
+                                ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
+                            """, (search_id, meal_type, weekday))
+                            conn.commit()
+                            st.success(f"Meal preference updated for {weekday}!")
+                            st.experimental_rerun()
                         except mysql.connector.Error as e:
                             conn.rollback()
                             st.error(f"Error updating meal: {e}")
-                            st.write(f"Debug: Database error occurred: {e}")  # Debug output
-
+                
                 # --- HEALTH INFORMATION ---
                 st.subheader("🏥 Health Information")
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
