@@ -142,14 +142,29 @@ if selected_table == "student":
 
                     if meal_submitted:
                         try:
-                            # Use REPLACE instead of UPDATE/INSERT to handle both cases
-                            cursor.execute("""
-                                REPLACE INTO Meals (student_id, weekday, meal_type)
-                                VALUES (%s, %s, %s)
-                            """, (search_id, weekday, meal_type))
-                            
-                            conn.commit()
-                            st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
+                            # Check if a meal record exists for the student and weekday
+                            cursor.execute("SELECT COUNT(*) as count FROM Meals WHERE student_id = %s AND weekday = %s", 
+                                          (search_id, weekday))
+                            meal_exists = cursor.fetchone()['count'] > 0
+
+                            if meal_exists:
+                                # Update existing meal record
+                                cursor.execute("""
+                                    UPDATE Meals 
+                                    SET meal_type = %s
+                                    WHERE student_id = %s AND weekday = %s
+                                """, (meal_type, search_id, weekday))
+                                conn.commit()
+                                st.success(f"Meal updated for {weekday} to meal type {meal_type}!")
+                            else:
+                                # Insert new meal record since no existing record was found
+                                cursor.execute("""
+                                    INSERT INTO Meals (student_id, weekday, meal_type)
+                                    VALUES (%s, %s, %s)
+                                """, (search_id, weekday, meal_type))
+                                conn.commit()
+                                st.success(f"Meal preference added for {weekday} with meal type {meal_type}!")
+                            st.experimental_rerun()
                         except mysql.connector.Error as e:
                             conn.rollback()
                             st.error(f"Error updating meal: {e}")
