@@ -129,15 +129,17 @@ if selected_table == "student":
                 
                 # --- MEAL MANAGEMENT ---
                 st.subheader("Update Meal Preference")
-                weekday_update = st.selectbox("Weekday to Update",["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], key="update")
+                weekday_update = st.selectbox("Weekday to Update", 
+                                         ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], 
+                                         key="update")
                 meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal")
+
                 if st.button("Submit Meal Update"):
                     try:
-                    # Using ON DUPLICATE KEY UPDATE for proper meal updates
                         cursor.execute("""
-                        INSERT INTO Meals (student_id, weekday, meal_type)
-                        VALUES (%s, %s, %s)
-                        ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
+                            INSERT INTO Meals (student_id, weekday, meal_type)
+                            VALUES (%s, %s, %s)
+                            ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
                         """, (search_id, weekday_update, meal_update))
                         conn.commit()
                         st.success("Meal preference updated successfully")
