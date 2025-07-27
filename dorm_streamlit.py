@@ -139,7 +139,8 @@ if selected_table == "student":
                 else:
                     st.info("No meal preferences found for this student.")
                 
-                with st.form("update_meal_form"):
+                # Use a unique key for the meal update form
+                with st.form(f"update_meal_form_{search_id}"):
                     weekday_update = st.selectbox("Weekday to Update", 
                                                   ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
                     meal_update = st.selectbox("New Meal Type", ["A", "B"])
@@ -153,10 +154,17 @@ if selected_table == "student":
                                 ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
                             """, (search_id, weekday_update, meal_update))
                             conn.commit()
-                            st.success("Meal preference updated successfully")
-                            st.experimental_rerun()
+                            st.success(f"Meal preference updated successfully for {weekday_update} to meal type {meal_update}")
+                            
+                            # Show updated meal preferences
+                            cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
+                            updated_meals = cursor.fetchall()
+                            if updated_meals:
+                                st.write("Updated Meal Preferences:")
+                                st.dataframe(pd.DataFrame(updated_meals))
+                            
                         except mysql.connector.Error as e:
-                            #conn.rollback()
+                            conn.rollback()
                             st.error(f"Error updating meal: {e}")
                 
                 # --- HEALTH INFORMATION ---
@@ -165,7 +173,7 @@ if selected_table == "student":
                 health = cursor.fetchone()
                 
                 if health:
-                    with st.form("health_form"):
+                    with st.form(f"health_form_{search_id}"):
                         st.write("Current Health Information")
                         desc = st.text_area("Description", health['description'])
                         prescription = st.text_input("Prescription", health['prescription'])
@@ -185,7 +193,7 @@ if selected_table == "student":
                                 st.error(f"Error updating health info: {e}")
                 else:
                     st.info("No health information found.")
-                    with st.form("add_health_form"):
+                    with st.form(f"add_health_form_{search_id}"):
                         st.write("Add Health Information")
                         desc = st.text_area("Description")
                         prescription = st.text_input("Prescription")
