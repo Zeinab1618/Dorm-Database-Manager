@@ -72,7 +72,7 @@ if table_choice == "student":
             st.warning("Student ID not found.")
 
     # Add student
-st.markdown("### ✨ Add Student")
+    st.markdown("### ✨ Add Student")
 with st.expander("➕ Add Student"):
     with st.form("add_student_form"):
         sid = st.text_input("Student ID", key="student_id_input")
@@ -119,18 +119,11 @@ with st.expander("➕ Add Student"):
                 
                 if health_desc or prescription or guardian:
                     cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                (sid_int, health_desc or None, prescription or None, guardian or None))
+                                (sid_int, health_desc, prescription, guardian))
                 
                 update_room_occupancy(room_id)
                 conn.commit()
                 st.success("Student added with related data.")
-                    
-                except mysql.connector.Error as err:
-                    conn.rollback()
-                    st.error(f"Database error: {err.msg}")
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"An error occurred: {str(e)}")
     # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
     search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
