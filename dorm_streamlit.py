@@ -208,73 +208,35 @@ elif table_choice == "Penalty":
 
 # ---------------------- MAINTENANCE TABLE ----------------------
 elif table_choice == "MaintenanceRequest":
-    # Initialize session state for maintenance
-    if 'maintenance_id' not in st.session_state:
-        st.session_state['maintenance_id'] = None
-    
-    # Update Request Section
     st.markdown("### 🛠️ Update Request")
-    req_id = st.number_input("Maintenance Request ID to Update", step=1, key="update_req_id")
-    
-    if st.button("Search Maintenance Request"):
-        st.session_state['maintenance_id'] = req_id
-    
-    if st.session_state['maintenance_id'] is not None:
-        req_id = st.session_state['maintenance_id']
-        cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
-        request = cursor.fetchone()
 
-        if request:
-            st.write("Current Request Info", request)
-            
-            with st.form("update_request_form"):
-                new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], 
-                                        index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
-                new_description = st.text_area("Update Description", value=request['description'])
-                
-                if st.form_submit_button("Update Request"):
-                    cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", 
-                                 (new_status, new_description, req_id))
-                    conn.commit()
-                    st.success("Maintenance request updated successfully!")
-        else:
-            st.info("No maintenance request found with that ID.")
+    req_id = st.number_input("Maintenance Request ID to Update", step=1)
+    cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
+    request = cursor.fetchone()
 
-    # Add New Request Section
+    if request:
+        new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
+        new_description = st.text_area("Update Description", value=request['description'])
+
+        if st.button("Update Request"):
+            cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", (new_status, new_description, req_id))
+            conn.commit()
+            st.success("Maintenance request updated.")
+    else:
+        st.info("No maintenance request found with that ID.")
+
     st.markdown("---")
     st.markdown("### ➕ Add New Maintenance Request")
-    
-    with st.form("add_request_form"):
-        request_id = st.number_input("Request ID", step=1, key="add_request_id")
-        room_id = st.number_input("Room ID", step=1, key="add_room_id")
-        new_desc = st.text_area("Description", key="add_desc")
-        new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
-        
-        if st.form_submit_button("Add Request"):
-            try:
-                # First check if room exists
-                cursor.execute("SELECT id FROM room WHERE id = %s", (room_id,))
-                if not cursor.fetchone():
-                    st.error(f"Room ID {room_id} doesn't exist!")
-                    return
-                
-                # Check if request ID already exists
-                cursor.execute("SELECT id FROM MaintenanceRequest WHERE id = %s", (request_id,))
-                if cursor.fetchone():
-                    st.error(f"Request ID {request_id} already exists!")
-                    return
-                
-                # If checks pass, insert the record
-                cursor.execute(
-                    "INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", 
-                    (request_id, room_id, new_desc, new_stat)
-                )
-                conn.commit()
-                st.success("New maintenance request added successfully!")
-            except mysql.connector.Error as err:
-                st.error(f"Database error: {err.msg}")
-            except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+
+    new_desc = st.text_area("Description")
+    new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
+    request_id = st.number_input("Request ID", step=1, key="add_sid")
+    room_id = st.number_input("Room ID", step=1, key="add_room_id") 
+
+    if st.button("Add Request"):
+        cursor.execute("INSERT INTO MaintenanceRequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)", (request_id, room_id, new_desc, new_stat))
+        conn.commit()
+        st.success("New maintenance request added.")
 
 cursor.close()
 conn.close()
