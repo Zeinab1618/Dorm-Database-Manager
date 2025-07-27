@@ -32,7 +32,7 @@ def get_available_rooms():
     return cursor.fetchall()
 
 # ---------------------- Table Choice ----------------------
-all_tables = ["Select", "student", "penalty", "MaintenanceRequest", "Meals", "room", "Building", "health_issues"]
+all_tables = ["Select", "student", "Penalty", "MaintenanceRequest", "Meals", "room", "Building", "health_issues"]
 table_choice = st.selectbox("Select Table to View", all_tables)
 
 if table_choice != "Select":
@@ -142,7 +142,7 @@ if table_choice == "student":
             st.warning("Student not found.")
 
 # ---------------------- PENALTY TABLE ----------------------
-elif table_choice == "penalty":
+elif table_choice == "Penalty":
     st.markdown("### ✏️ Update Penalty")
     pid = st.number_input("Student ID", step=1)
     points = st.number_input("New Total Points", step=1)
