@@ -129,44 +129,23 @@ if selected_table == "student":
                 
                 # --- MEAL MANAGEMENT ---
                 st.subheader("Update Meal Preference")
-                # Fetch all meal preferences for the student
-                cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
-                meals = cursor.fetchall()
-                
-                if meals:
-                    st.write("Current Meal Preferences:")
-                    st.dataframe(pd.DataFrame(meals))
-                else:
-                    st.info("No meal preferences found for this student.")
-                
-                # Use a unique key for the meal update form
-                with st.form(f"update_meal_form_{search_id}"):
-                    weekday_update = st.selectbox("Weekday to Update", 
-                                                  ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
-                    meal_update = st.selectbox("New Meal Type", ["A", "B"])
-                    
-                    if st.form_submit_button("Submit Meal Update"):
-                        try:
-                            # Using ON DUPLICATE KEY UPDATE for proper meal updates
-                            cursor.execute("""
-                                INSERT INTO Meals (student_id, weekday, meal_type)
-                                VALUES (%s, %s, %s)
-                                ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
-                            """, (search_id, weekday_update, meal_update))
-                            conn.commit()
-                            st.success(f"Meal preference updated successfully for {weekday_update} to meal type {meal_update}")
-                            
-                            # Show updated meal preferences
-                            cursor.execute("SELECT meal_type, weekday FROM Meals WHERE student_id = %s", (search_id,))
-                            updated_meals = cursor.fetchall()
-                            if updated_meals:
-                                st.write("Updated Meal Preferences:")
-                                st.dataframe(pd.DataFrame(updated_meals))
-                            
-                        except mysql.connector.Error as e:
-                            conn.rollback()
-                            st.error(f"Error updating meal: {e}")
-                
+                weekday_update = st.selectbox("Weekday to Update",["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], key="update")
+                meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal")
+                if st.button("Submit Meal Update"):
+                    try:
+                    # Using ON DUPLICATE KEY UPDATE for proper meal updates
+                        cursor.execute("""
+                        INSERT INTO Meals (student_id, weekday, meal_type)
+                        VALUES (%s, %s, %s)
+                        ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
+                        """, (search_id, weekday_update, meal_update))
+                        conn.commit()
+                        st.success("Meal preference updated successfully")
+                        st.experimental_rerun()
+                    except mysql.connector.Error as e:
+                        conn.rollback()
+                        st.error(f"Error updating meal: {e}")
+
                 # --- HEALTH INFORMATION ---
                 st.subheader("🏥 Health Information")
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
