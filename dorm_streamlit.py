@@ -32,12 +32,15 @@ def get_available_rooms():
     return cursor.fetchall()
 
 # ---------------------- Table Choice ----------------------
-table_choice = st.selectbox("Select Table to View", ["Select", "student", "penalty", "MaintenanceRequest"])
+all_tables = ["Select", "student", "penalty", "MaintenanceRequest", "Meals", "room", "building", "health_issues"]
+table_choice = st.selectbox("Select Table to View", all_tables)
+
+if table_choice != "Select":
+    st.subheader(f"{table_choice} Table")
+    st.dataframe(load_table(table_choice))
 
 # ---------------------- STUDENT TABLE ----------------------
 if table_choice == "student":
-    st.subheader("All Students")
-    st.dataframe(load_table("student"))
 
     # Delete student
     st.markdown("### 🔥 Delete Student")
@@ -90,6 +93,7 @@ if table_choice == "student":
                     cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
                                 (sid, health_desc, prescription, guardian))
                 update_room_occupancy(room_id)
+                conn.commit()
                 st.success("Student added with related data.")
 
     # Search student
@@ -135,9 +139,6 @@ if table_choice == "student":
 
 # ---------------------- PENALTY TABLE ----------------------
 elif table_choice == "penalty":
-    st.subheader("Penalty Table")
-    st.dataframe(load_table("Penalty"))
-
     st.markdown("### ✏️ Update Penalty")
     pid = st.number_input("Student ID", step=1)
     points = st.number_input("New Total Points", step=1)
@@ -148,10 +149,6 @@ elif table_choice == "penalty":
 
 # ---------------------- MAINTENANCE TABLE ----------------------
 elif table_choice == "MaintenanceRequest":
-    st.subheader("Maintenance Requests")
-    df = load_table("MaintenanceRequest")
-    st.dataframe(df)
-
     st.markdown("### 🛠️ Update Request Status")
     req_id = st.number_input("Maintenance Request ID", step=1)
     new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'])
