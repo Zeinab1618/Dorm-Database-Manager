@@ -139,33 +139,31 @@ if selected_table == "student":
                 else:
                     st.info("No meal preferences found for this student.")
                 
-                with st.form("update_meal_form"):
+                with st.form("update_meal_form_unique"):
                     st.write("Update or Add Meal Preference")
-                    weekday_update = st.selectbox("Weekday to Update", 
-                                                  ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-                                                  key="meal_weekday_update")
-                    meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal_type_update")
+                    weekday_update = st.selectbox("Weekday to Update",
+                                                   ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                                                   key="meal_weekday")
+                    meal_update = st.selectbox("New Meal Type", ["A", "B"], key="meal_type")
                     
-                    meal_submitted = st.form_submit_button("Submit Meal Update", key="meal_submit")
-                    
+                    # ✅
+                    meal_submitted = st.form_submit_button("Submit Meal Update", key="submit_meal_update")
+                
                     if meal_submitted:
-                        st.write("Debug: Meal update form submitted")  # Debug output
                         try:
                             student_id = int(search_id)
-                            st.write(f"Debug: Executing query for student_id={student_id}, weekday={weekday_update}, meal_type={meal_update}")  # Debug output
                             cursor.execute("""
                                 INSERT INTO Meals (student_id, weekday, meal_type)
                                 VALUES (%s, %s, %s)
                                 ON DUPLICATE KEY UPDATE meal_type = VALUES(meal_type)
                             """, (student_id, weekday_update, meal_update))
                             conn.commit()
-                            st.write("Debug: Query executed and committed")  # Debug output
                             st.success("Meal preference updated successfully")
                             st.experimental_rerun()
                         except mysql.connector.Error as e:
                             conn.rollback()
                             st.error(f"Error updating meal: {e}")
-                            st.write(f"Debug: Database error occurred: {e}")  # Debug output
+
                 
                 # --- HEALTH INFORMATION ---
                 st.subheader("🏥 Health Information")
