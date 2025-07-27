@@ -200,7 +200,7 @@ if selected_table == "student":
                                     st.success("Health information added!")
                                 except mysql.connector.Error as e:
                                     conn.rollback()
-                                    U st.error(f"Error adding health info: {e}")
+                                    st.error(f"Error adding health info: {e}")
             
             else:
                 st.error("Student not found.")
