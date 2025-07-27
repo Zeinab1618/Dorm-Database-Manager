@@ -186,14 +186,37 @@ elif table_choice == "Penalty":
         st.success("Penalty updated.")
 
 # ---------------------- MAINTENANCE TABLE ----------------------
+# ---------------------- MAINTENANCE TABLE ----------------------
 elif table_choice == "MaintenanceRequest":
-    st.markdown("### 🛠️ Update Request Status")
-    req_id = st.number_input("Maintenance Request ID", step=1)
-    new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'])
-    if st.button("Update Status"):
-        cursor.execute("UPDATE MaintenanceRequest SET statues = %s WHERE id = %s", (new_status, req_id))
+    st.markdown("### 🛠️ Update Request")
+
+    req_id = st.number_input("Maintenance Request ID to Update", step=1)
+    cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
+    request = cursor.fetchone()
+
+    if request:
+        new_status = st.selectbox("New Status", ['Pending', 'In Progress', 'Resolved'], index=['Pending', 'In Progress', 'Resolved'].index(request['statues']))
+        new_description = st.text_area("Update Description", value=request['description'])
+
+        if st.button("Update Request"):
+            cursor.execute("UPDATE MaintenanceRequest SET statues = %s, description = %s WHERE id = %s", (new_status, new_description, req_id))
+            conn.commit()
+            st.success("Maintenance request updated.")
+    else:
+        st.info("No maintenance request found with that ID.")
+
+    st.markdown("---")
+    st.markdown("### ➕ Add New Maintenance Request")
+
+    new_desc = st.text_area("Description")
+    new_stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'], key="add_status")
+    student_id = st.number_input("Student ID", step=1, key="add_sid")
+
+    if st.button("Add Request"):
+        cursor.execute("INSERT INTO MaintenanceRequest (student_id, description, statues) VALUES (%s, %s, %s)", (student_id, new_desc, new_stat))
         conn.commit()
-        st.success("Request status updated.")
+        st.success("New maintenance request added.")
+
 
 cursor.close()
 conn.close()
