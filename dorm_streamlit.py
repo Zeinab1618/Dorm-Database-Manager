@@ -72,11 +72,16 @@ if table_choice == "student":
             st.warning("Student ID not found.")
 
     # Add student
-    st.markdown("### ✨ Add Student")
-    with st.expander("➕ Add Student"):
-        sid = st.number_input("Student ID", step=1)
-        name = st.text_input("Student Name")
-        contact = st.text_input("Contact Number")
+st.markdown("### ✨ Add Student")
+with st.expander("➕ Add Student"):
+    with st.form("add_student_form"):
+        sid = st.text_input("Student ID", key="student_id_input")
+        if sid and not sid.isdigit():
+            st.error("Student ID must contain only numbers (0-9)")
+        
+        contact = st.text_input("Contact Number", key="contact_input")
+        if contact and not contact.isdigit():
+            st.error("Contact number must contain only numbers (0-9)")
 
         room_list = get_available_rooms()
         room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']})" for r in room_list]
@@ -94,19 +99,38 @@ if table_choice == "student":
         prescription = st.text_input("Prescription (Optional)")
         guardian = st.text_input("Guardian Contact (Optional)")
 
-        if st.button("Add Student"):
-            if free_slots <= 0:
+        if st.form_submit_button("Add Student"):
+            if not sid or not sid.isdigit():
+                st.error("Please enter a valid Student ID (numbers only)")
+            elif not contact or not contact.isdigit():
+                st.error("Please enter a valid Contact Number (numbers only)")
+            elif free_slots <= 0:
                 st.error("Room is full! Cannot add student.")
             else:
-                cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", (sid, name, contact, room_id))
-                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", (sid, meal_type, weekday))
-                cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", (sid, now))
-                if health_desc and prescription and guardian:
+                sid_int = int(sid)
+                contact_str = str(contact)
+                
+                cursor.execute("INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)", 
+                             (sid_int, name, contact_str, room_id))
+                cursor.execute("INSERT INTO Meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)", 
+                             (sid_int, meal_type, weekday))
+                cursor.execute("INSERT INTO Penalty (student_id, last_updated) VALUES (%s, %s)", 
+                             (sid_int, now))
+                
+                if health_desc or prescription or guardian:
                     cursor.execute("INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
-                                (sid, health_desc, prescription, guardian))
+                                (sid_int, health_desc or None, prescription or None, guardian or None))
+                
                 update_room_occupancy(room_id)
                 conn.commit()
                 st.success("Student added with related data.")
+                    
+                except mysql.connector.Error as err:
+                    conn.rollback()
+                    st.error(f"Database error: {err.msg}")
+                except Exception as e:
+                    conn.rollback()
+                    st.error(f"An error occurred: {str(e)}")
     # Search student 
     st.markdown("### 🔍 Search & Update Student Info")
     search_id = st.number_input("Enter Student ID to Search", step=1, key="search_input")
