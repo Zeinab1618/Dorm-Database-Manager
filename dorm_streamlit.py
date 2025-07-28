@@ -4,7 +4,6 @@ import pandas as pd
 from datetime import datetime
 from pytz import timezone
 
-# Connect to MySQL
 conn = mysql.connector.connect(
     host=st.secrets["mysql"]["host"],
     user=st.secrets["mysql"]["user"],
@@ -17,7 +16,6 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
-# Initialize session state for search
 if 'search_id' not in st.session_state:
     st.session_state['search_id'] = None
 
@@ -36,7 +34,6 @@ def get_available_rooms():
     cursor.execute("SELECT id, capacity, current_occupancy FROM room")
     return cursor.fetchall()
 
-# Egypt timezone setup
 egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
@@ -162,7 +159,7 @@ if table_choice == "student":
                     conn.commit()
                     st.success("Meal updated successfully!")
 
-            # HEALTH UPDATE FORM
+            # health update
             with st.form("health_form"):
                 cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (search_id,))
                 health = cursor.fetchone()
@@ -229,7 +226,7 @@ elif table_choice == "MaintenanceRequest":
     if 'show_not_found' not in st.session_state:
         st.session_state.show_not_found = False
 
-    # Update Request Section
+    # Update Request
     st.markdown("### 🛠️ Update Request")
     req_id = st.number_input("Maintenance Request ID to Update", step=1, key="update_req_input")
     
@@ -237,7 +234,6 @@ elif table_choice == "MaintenanceRequest":
         st.session_state.search_maintenance_id = req_id
         st.session_state.show_not_found = True  # Only show "not found" after search
         
-        # Reset not found message if searching again
         cursor.execute("SELECT * FROM MaintenanceRequest WHERE id = %s", (req_id,))
         if cursor.fetchone():
             st.session_state.show_not_found = False
@@ -261,7 +257,7 @@ elif table_choice == "MaintenanceRequest":
         elif st.session_state.show_not_found:
             st.info("No maintenance request found with that ID.")
 
-    # Add New Request Section
+    # Add Request
     st.markdown("---")
     st.markdown("### ➕ Add New Maintenance Request")
     
