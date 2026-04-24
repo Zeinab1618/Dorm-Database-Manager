@@ -76,8 +76,8 @@ table_options = list(TABLE_NAMES.values())
 # Simple selectbox without any rerun tricks
 selected_display = st.selectbox(
     "Select Table to View", 
-    placeholder = "Choose a table...",
     table_options,
+    placeholder = "Choose a table...",
     key="table_selector",
     
 )
