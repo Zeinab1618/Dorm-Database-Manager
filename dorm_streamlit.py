@@ -18,9 +18,6 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
-if 'selected_table' not in st.session_state:
-    st.session_state['selected_table'] = None
-
 # ---------------------- Utilities ----------------------
 VALID_TABLES = [
     "student",
@@ -32,26 +29,15 @@ VALID_TABLES = [
     "health_issues"
 ]
 
-# Create formatted table names with proper display names
-FORMATTED_TABLES = [
-    "Student",
-    "Penalty", 
-    "Maintenancerequest",
-    "Meals", 
-    "Room",
-    "Building",
-    "Health issues"
-]
-
-# Create mapping between formatted names and original names
-TABLE_MAPPING = {
-    "Student": "student",
-    "Penalty": "penalty",
-    "Maintenancerequest": "maintenancerequest",
-    "Meals": "meals",
-    "Room": "room",
-    "Building": "building",
-    "Health issues": "health_issues"
+# Define table display names
+TABLE_NAMES = {
+    "student": "Student",
+    "penalty": "Penalty",
+    "maintenancerequest": "Maintenancerequest",
+    "meals": "Meals",
+    "room": "Room",
+    "building": "Building",
+    "health_issues": "Health issues"
 }
 
 def load_table(table_name):
@@ -89,27 +75,31 @@ def contact_exists(contact):
 egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
-# ---------------------- Table Choice ---------------------- 
-# Display dropdown with all options
-table_choice_formatted = st.selectbox(
+# ---------------------- Table Selection ---------------------- 
+# Create list of options for dropdown
+table_options = list(TABLE_NAMES.values())
+selected_table_display = st.selectbox(
     "Select Table to View", 
-    FORMATTED_TABLES,
+    table_options,
     index=None,
     placeholder="Choose a table..."
 )
 
-# Only show table data if a valid table is selected
-if table_choice_formatted:
-    table_choice = TABLE_MAPPING[table_choice_formatted]
-    st.session_state['selected_table'] = table_choice
+# Only show content if a table is selected
+if selected_table_display:
+    # Get the actual table name from display name
+    for table_key, table_display in TABLE_NAMES.items():
+        if table_display == selected_table_display:
+            table_choice = table_key
+            break
     
     # Display table data
     df = load_table(table_choice)
+    st.subheader(f"{selected_table_display} Table")
+    
     if not df.empty:
-        st.subheader(f"{table_choice_formatted} Table") 
         st.dataframe(df)
     else:
-        st.subheader(f"{table_choice_formatted} Table") 
         st.info("No data found in this table")
     
     # ---------------------- STUDENT TABLE ----------------------
@@ -145,7 +135,6 @@ if table_choice_formatted:
         # Add student
         st.markdown("### ✨ Add Student")
         with st.expander("➕ Add New Student", expanded=False):
-            # Check if rooms exist
             cursor.execute("SELECT COUNT(*) as count FROM room")
             room_count = cursor.fetchone()['count']
             
@@ -156,7 +145,6 @@ if table_choice_formatted:
                 name = st.text_input("Student Name", key="add_name")
                 contact = st.text_input("Contact Number (11 digits)", key="add_contact", max_chars=11)
                 
-                # Real-time contact validation
                 if contact and len(contact) == 11:
                     if contact_exists(contact):
                         st.error("❌ This contact number is already registered!")
@@ -167,7 +155,6 @@ if table_choice_formatted:
                 
                 room_list = get_available_rooms()
                 if room_list:
-                    # Show only rooms with available space
                     available_rooms = [r for r in room_list if r['capacity'] - r['current_occupancy'] > 0]
                     
                     if not available_rooms:
@@ -186,7 +173,6 @@ if table_choice_formatted:
                         guardian_contact = st.text_input("Guardian Contact (11 digits, required if health issues)", max_chars=11, key="guardian")
                         
                         if st.button("Add Student", type="primary", key="add_student_btn"):
-                            # Validation
                             errors = []
                             if not sid:
                                 errors.append("Student ID is required")
@@ -214,25 +200,21 @@ if table_choice_formatted:
                                     st.error(f"❌ {error}")
                             else:
                                 try:
-                                    # Insert student
                                     cursor.execute(
                                         "INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
                                         (sid, name, contact, room_id)
                                     )
                                     
-                                    # Insert meal preference
                                     cursor.execute(
                                         "INSERT INTO meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
                                         (sid, meal_type, weekday)
                                     )
                                     
-                                    # Insert penalty record
                                     cursor.execute(
                                         "INSERT INTO penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
                                         (sid, 0, now)
                                     )
                                     
-                                    # Insert health issues if provided
                                     if health_desc or prescription or guardian_contact:
                                         cursor.execute(
                                             "INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
@@ -334,10 +316,8 @@ if table_choice_formatted:
 
     # ---------------------- MEALS ----------------------
     elif table_choice == "meals":
-        st.markdown("### 📝 View Meals")
-        st.info("Meals table shows student meal preferences")
+        st.markdown("### 📝 Meal Preferences")
         
-        # Option to add meal preference
         with st.expander("➕ Add Meal Preference"):
             student_id = st.number_input("Student ID", step=1, min_value=1, key="meal_student_id")
             meal_type = st.selectbox("Meal Type", ["A", "B"], key="meal_type")
@@ -360,7 +340,7 @@ if table_choice_formatted:
                     except mysql.connector.Error as err:
                         st.error(f"❌ Error: {err}")
 
-    # ---------------------- ROOM TABLE ----------------------
+    # ---------------------- ROOM ----------------------
     elif table_choice == "room":
         st.markdown("### ➕ Add New Room")
         with st.expander("➕ Add Room"):
@@ -386,7 +366,7 @@ if table_choice_formatted:
                     else:
                         st.error(f"❌ Error: {err}")
 
-    # ---------------------- BUILDING TABLE ----------------------
+    # ---------------------- BUILDING ----------------------
     elif table_choice == "building":
         st.markdown("### ➕ Add New Building")
         with st.expander("➕ Add Building"):
@@ -410,52 +390,37 @@ if table_choice_formatted:
 
     # ---------------------- HEALTH ISSUES ----------------------
     elif table_choice == "health_issues":
-        st.markdown("### 🏥 Health Issues Records")
-        st.info("Health issues table shows student medical information")
-        
-        # Display existing health records
-        cursor.execute("""
-            SELECT h.*, s.student_Name 
-            FROM health_issues h 
-            JOIN student s ON h.student_id = s.id
-        """)
-        health_records = cursor.fetchall()
-        if health_records:
-            st.subheader("Current Health Records")
-            st.dataframe(pd.DataFrame(health_records))
+        st.markdown("### 🏥 Health Issues Management")
         
         # Option to add/update health issues
-        with st.expander("➕ Add/Update Health Issues"):
+        with st.expander("➕ Add/Update Health Issues", expanded=True):
             student_id = st.number_input("Student ID", step=1, min_value=1, key="health_student_id")
             
             if student_id:
-                # Check if student exists
                 if student_exists(student_id):
-                    # Fetch existing health issues if any
+                    cursor.execute("SELECT student_Name FROM student WHERE id = %s", (student_id,))
+                    student = cursor.fetchone()
+                    st.info(f"👤 Student: {student['student_Name']}")
+                    
                     cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (student_id,))
                     existing = cursor.fetchone()
                     
-                    # Get student name
-                    cursor.execute("SELECT student_Name FROM student WHERE id = %s", (student_id,))
-                    student = cursor.fetchone()
-                    st.info(f"Student: {student['student_Name']}")
-                    
                     if existing:
-                        st.info(f"Updating existing health record")
+                        st.warning("⚠️ This student already has a health record. Updating existing record.")
                         default_desc = existing['description'] if existing['description'] else ""
                         default_prescription = existing['prescription'] if existing['prescription'] else ""
                         default_guardian = existing['guardian_contact']
                     else:
-                        st.info(f"Adding new health record")
+                        st.info("📝 This student has no health record yet. Adding new record.")
                         default_desc = ""
                         default_prescription = ""
                         default_guardian = ""
                     
-                    health_desc = st.text_area("Health Description", value=default_desc)
+                    health_desc = st.text_area("Health Description", value=default_desc, height=100)
                     prescription = st.text_input("Prescription", value=default_prescription)
                     guardian_contact = st.text_input("Guardian Contact (11 digits)", value=default_guardian, max_chars=11)
                     
-                    if st.button("Save Health Record", key="save_health"):
+                    if st.button("💾 Save Health Record", key="save_health"):
                         if not guardian_contact:
                             st.error("❌ Guardian Contact is required!")
                         elif len(guardian_contact) != 11:
@@ -463,7 +428,6 @@ if table_choice_formatted:
                         else:
                             try:
                                 if existing:
-                                    # Update existing record
                                     cursor.execute(
                                         "UPDATE health_issues SET description = %s, prescription = %s, guardian_contact = %s WHERE student_id = %s",
                                         (health_desc if health_desc else None, 
@@ -472,7 +436,6 @@ if table_choice_formatted:
                                          student_id)
                                     )
                                 else:
-                                    # Insert new record
                                     cursor.execute(
                                         "INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
                                         (student_id, 
