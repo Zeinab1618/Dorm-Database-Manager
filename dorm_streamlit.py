@@ -73,15 +73,17 @@ now = datetime.now(egypt)
 # Create list of options for dropdown
 table_options = list(TABLE_NAMES.values())
 
-# Simple selectbox without any rerun tricks
+# Use index=None to make it a true placeholder (not selectable)
 selected_display = st.selectbox(
     "Select Table to View", 
-    ["Choose a table..."] + table_options,
+    table_options,
+    index=None,
+    placeholder="Choose a table...",
     key="table_selector"
 )
 
 # Update current table based on selection
-if selected_display != "Choose a table...":
+if selected_display:
     for table_key, table_display in TABLE_NAMES.items():
         if table_display == selected_display:
             st.session_state.current_table = table_key
