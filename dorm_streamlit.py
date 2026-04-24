@@ -70,20 +70,19 @@ egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
 # ---------------------- Table Selection ---------------------- 
-# Create list of options for dropdown
-table_options = list(TABLE_NAMES.values())
+# Create list of options for dropdown with a placeholder as first option
+table_options = ["-- Select a table --"] + list(TABLE_NAMES.values())
 
-# Use index=None to make it a true placeholder (not selectable)
+# Use index=0 to show the placeholder by default
 selected_display = st.selectbox(
     "Select Table to View", 
     table_options,
-    index=None,
-    placeholder="Choose a table...",
+    index=0,
     key="table_selector"
 )
 
-# Update current table based on selection
-if selected_display:
+# Update current table based on selection (skip the placeholder)
+if selected_display and selected_display != "-- Select a table --":
     for table_key, table_display in TABLE_NAMES.items():
         if table_display == selected_display:
             st.session_state.current_table = table_key
