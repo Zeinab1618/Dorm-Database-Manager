@@ -18,6 +18,30 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
+# Add custom CSS to fix cursor on dropdown
+st.markdown("""
+    <style>
+    /* Make the selectbox dropdown arrow show pointer cursor */
+    .stSelectbox [data-baseweb="select"] {
+        cursor: pointer;
+    }
+    .stSelectbox [data-baseweb="select"] * {
+        cursor: pointer;
+    }
+    /* For the dropdown arrow specifically */
+    .stSelectbox svg {
+        cursor: pointer;
+    }
+    /* For the entire selectbox container */
+    div[data-testid="stSelectbox"] {
+        cursor: pointer;
+    }
+    div[data-testid="stSelectbox"] * {
+        cursor: pointer;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Initialize session state
 if 'current_table' not in st.session_state:
     st.session_state.current_table = None
