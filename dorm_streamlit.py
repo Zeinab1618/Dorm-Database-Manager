@@ -3,7 +3,7 @@ import mysql.connector
 import pandas as pd
 from datetime import datetime
 from pytz import timezone
-import traceback
+import time
 
 # ---------------------- DB CONNECTION ----------------------
 conn = mysql.connector.connect(
@@ -18,8 +18,6 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
-if 'search_id' not in st.session_state:
-    st.session_state['search_id'] = None
 if 'selected_table' not in st.session_state:
     st.session_state['selected_table'] = None
 
@@ -72,36 +70,14 @@ def student_exists(student_id):
     cursor.execute("SELECT id FROM student WHERE id = %s", (student_id,))
     return cursor.fetchone() is not None
 
-def check_all_tables_for_student_id(student_id):
-    """Check all tables for any record with this student_id"""
-    tables_to_check = ["student", "meals", "penalty", "health_issues"]
-    results = {}
-    
-    for table in tables_to_check:
-        cursor.execute(f"SELECT * FROM {table} WHERE student_id = %s", (student_id,))
-        results[table] = cursor.fetchall()
-    
-    return results
-
-def force_cleanup_student_id(student_id):
-    """Force delete any record with this student_id from all tables"""
-    try:
-        cursor.execute("DELETE FROM meals WHERE student_id = %s", (student_id,))
-        cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (student_id,))
-        cursor.execute("DELETE FROM penalty WHERE student_id = %s", (student_id,))
-        cursor.execute("DELETE FROM student WHERE id = %s", (student_id,))
-        conn.commit()
-        return True
-    except mysql.connector.Error as err:
-        conn.rollback()
-        st.error(f"Error in force cleanup: {err}")
-        return False
+def contact_exists(contact):
+    cursor.execute("SELECT contact FROM student WHERE contact = %s", (contact,))
+    return cursor.fetchone() is not None
 
 egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
 # ---------------------- Table Choice ---------------------- 
-# Use index to set placeholder
 table_options = FORMATTED_TABLES
 table_choice_formatted = st.selectbox(
     "Select Table to View", 
@@ -112,7 +88,6 @@ table_choice_formatted = st.selectbox(
 
 # Only show table data if a valid table is selected
 if table_choice_formatted:
-    # Convert formatted name back to original table name
     table_choice = TABLE_MAPPING[table_choice_formatted]
     st.session_state['selected_table'] = table_choice
     
@@ -121,56 +96,6 @@ if table_choice_formatted:
     
     # ---------------------- STUDENT TABLE ----------------------
     if table_choice == "student":
-        # Debug section - Check for any hidden records
-        with st.expander("🔧 Database Diagnostic Tools", expanded=True):
-            st.warning("⚠️ Use these tools to diagnose and fix database issues")
-            
-            debug_id = st.number_input("Enter Student ID to Diagnose", step=1, min_value=1, key="debug_id")
-            
-            if st.button("Run Full Diagnostic"):
-                if debug_id:
-                    st.write(f"### Diagnostic Report for Student ID: {debug_id}")
-                    
-                    # Check all tables
-                    results = check_all_tables_for_student_id(debug_id)
-                    
-                    found_any = False
-                    for table, records in results.items():
-                        if records:
-                            found_any = True
-                            st.error(f"❌ Found {len(records)} record(s) in {table} table:")
-                            st.dataframe(pd.DataFrame(records))
-                        else:
-                            st.success(f"✓ No records found in {table} table")
-                    
-                    if not found_any:
-                        st.success(f"✅ No records found for Student ID {debug_id} anywhere in the database!")
-                        st.info("You should be able to add this student without any issues.")
-                    
-                    # Show the actual error that would occur
-                    st.markdown("### Test Insertion")
-                    if st.button("Test What Would Happen on Insert"):
-                        try:
-                            # Try a test insert with rollback
-                            cursor.execute("START TRANSACTION")
-                            cursor.execute(
-                                "INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
-                                (debug_id, "TEST_USER", "0000000000", 1)
-                            )
-                            cursor.execute("ROLLBACK")
-                            st.success("✅ Test insert would succeed! No conflicts found.")
-                        except mysql.connector.IntegrityError as e:
-                            st.error(f"❌ Test insert failed with error: {e}")
-                            st.code(traceback.format_exc())
-            
-            st.markdown("---")
-            
-            if st.button("Force Cleanup Student ID (Use if diagnostic shows records)"):
-                if debug_id:
-                    if force_cleanup_student_id(debug_id):
-                        st.success(f"✅ Force cleanup completed for Student ID {debug_id}")
-                        st.rerun()
-        
         st.markdown("### 🔥 Delete Student")
         delete_id = st.number_input("Enter Student ID to Delete", step=1, min_value=1, format="%d", key="delete_id")
         
@@ -180,137 +105,262 @@ if table_choice_formatted:
                     try:
                         cursor.execute("SELECT room_id FROM student WHERE id = %s", (delete_id,))
                         result = cursor.fetchone()
-                        room_id = result["room_id"]
-                        
-                        cursor.execute("DELETE FROM meals WHERE student_id = %s", (delete_id,))
-                        cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (delete_id,))
-                        cursor.execute("DELETE FROM penalty WHERE student_id = %s", (delete_id,))
-                        cursor.execute("DELETE FROM student WHERE id = %s", (delete_id,))
-                        update_room_occupancy(room_id)
-                        conn.commit()
-                        st.success(f"✅ Student ID {delete_id} deleted successfully!")
-                        st.rerun()
+                        if result:
+                            room_id = result["room_id"]
+                            cursor.execute("DELETE FROM meals WHERE student_id = %s", (delete_id,))
+                            cursor.execute("DELETE FROM health_issues WHERE student_id = %s", (delete_id,))
+                            cursor.execute("DELETE FROM penalty WHERE student_id = %s", (delete_id,))
+                            cursor.execute("DELETE FROM student WHERE id = %s", (delete_id,))
+                            update_room_occupancy(room_id)
+                            conn.commit()
+                            st.success(f"✅ Student ID {delete_id} deleted successfully!")
+                            time.sleep(1)
+                            st.rerun()
                     except mysql.connector.Error as err:
                         conn.rollback()
                         st.error(f"❌ Error deleting: {err}")
                 else:
-                    st.warning(f"⚠️ Student ID {delete_id} not found in student table.")
-                    
-                    # Check if there are orphaned records
-                    results = check_all_tables_for_student_id(delete_id)
-                    has_orphans = any(len(records) > 0 for records in results.values())
-                    
-                    if has_orphans:
-                        st.error("⚠️ Found orphaned records! Use the Diagnostic Tools above to clean them.")
+                    st.warning(f"⚠️ Student ID {delete_id} not found")
 
         st.markdown("---")
         
         # Add student
         st.markdown("### ✨ Add Student")
         with st.expander("➕ Add New Student", expanded=False):
-            sid = st.number_input("Student ID", step=1, min_value=1, format="%d", key="add_sid")
-            name = st.text_input("Student Name", key="add_name")
-            contact = st.text_input("Contact Number", key="add_contact")
+            # Check if rooms exist
+            cursor.execute("SELECT COUNT(*) as count FROM room")
+            room_count = cursor.fetchone()['count']
             
-            room_list = get_available_rooms()
-            if room_list:
-                available_rooms = [r for r in room_list if r['capacity'] - r['current_occupancy'] > 0]
+            if room_count == 0:
+                st.error("❌ No rooms available! Please add rooms to the 'room' table first.")
+            else:
+                sid = st.number_input("Student ID", step=1, min_value=1, format="%d", key="add_sid")
+                name = st.text_input("Student Name", key="add_name")
+                contact = st.text_input("Contact Number (11 digits)", key="add_contact", max_chars=11)
                 
-                if available_rooms:
-                    room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']} slots)" for r in available_rooms]
-                    room_choice = st.selectbox("Select Room", room_display)
-                    selected_room = available_rooms[room_display.index(room_choice)]
-                    room_id = selected_room['id']
+                # Real-time contact validation
+                if contact and len(contact) == 11:
+                    if contact_exists(contact):
+                        st.error("❌ This contact number is already registered!")
+                    else:
+                        st.success("✓ Contact number is available")
+                elif contact:
+                    st.warning("Contact number must be 11 digits")
+                
+                room_list = get_available_rooms()
+                if room_list:
+                    # Show only rooms with available space
+                    available_rooms = [r for r in room_list if r['capacity'] - r['current_occupancy'] > 0]
                     
-                    meal_type = st.selectbox("Meal Type", ["A", "B"])
-                    weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-                    health_desc = st.text_area("Health Description (Optional)")
-                    prescription = st.text_input("Prescription (Optional)")
-                    guardian = st.text_input("Guardian Contact (Optional)")
-                    
-                    if st.button("Add Student", type="primary", key="add_student_btn"):
-                        # Validation
-                        if not sid:
-                            st.error("❌ Student ID is required")
-                        elif not name:
-                            st.error("❌ Student Name is required")
-                        elif not contact:
-                            st.error("❌ Contact Number is required")
-                        else:
-                            # Double check if student exists before insert
-                            if student_exists(sid):
-                                st.error(f"❌ Student ID {sid} already exists!")
-                                # Show where it exists
-                                results = check_all_tables_for_student_id(sid)
-                                for table, records in results.items():
-                                    if records:
-                                        st.write(f"Found in {table}:")
-                                        st.dataframe(pd.DataFrame(records))
+                    if not available_rooms:
+                        st.error("❌ No rooms with available space! All rooms are full.")
+                    else:
+                        room_display = [f"Room {r['id']} (Free: {r['capacity'] - r['current_occupancy']} slots)" for r in available_rooms]
+                        room_choice = st.selectbox("Select Room", room_display)
+                        selected_index = room_display.index(room_choice)
+                        selected_room = available_rooms[selected_index]
+                        room_id = selected_room['id']
+                        
+                        meal_type = st.selectbox("Meal Type", ["A", "B"])
+                        weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+                        health_desc = st.text_area("Health Description (Optional)")
+                        prescription = st.text_input("Prescription (Optional)")
+                        guardian_contact = st.text_input("Guardian Contact (11 digits, required if health issues)", max_chars=11, key="guardian")
+                        
+                        if st.button("Add Student", type="primary", key="add_student_btn"):
+                            # Validation
+                            errors = []
+                            if not sid:
+                                errors.append("Student ID is required")
+                            elif student_exists(sid):
+                                errors.append(f"Student ID {sid} already exists")
+                            
+                            if not name:
+                                errors.append("Student Name is required")
+                            
+                            if not contact:
+                                errors.append("Contact Number is required")
+                            elif len(contact) != 11:
+                                errors.append("Contact number must be exactly 11 digits")
+                            elif contact_exists(contact):
+                                errors.append("This contact number is already registered")
+                            
+                            if health_desc or prescription or guardian_contact:
+                                if not guardian_contact:
+                                    errors.append("Guardian Contact is required when adding health issues")
+                                elif len(guardian_contact) != 11:
+                                    errors.append("Guardian contact must be exactly 11 digits")
+                            
+                            if errors:
+                                for error in errors:
+                                    st.error(f"❌ {error}")
                             else:
                                 try:
-                                    # Log the attempt
-                                    st.info(f"Attempting to add student ID: {sid}, Name: {name}, Room: {room_id}")
-                                    
                                     # Insert student
                                     cursor.execute(
                                         "INSERT INTO student (id, student_Name, contact, room_id) VALUES (%s, %s, %s, %s)",
                                         (sid, name, contact, room_id)
                                     )
-                                    st.success("✓ Student inserted")
                                     
                                     # Insert meal preference
                                     cursor.execute(
                                         "INSERT INTO meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
                                         (sid, meal_type, weekday)
                                     )
-                                    st.success("✓ Meal preference inserted")
                                     
                                     # Insert penalty record
                                     cursor.execute(
                                         "INSERT INTO penalty (student_id, total_points, last_updated) VALUES (%s, %s, %s)",
                                         (sid, 0, now)
                                     )
-                                    st.success("✓ Penalty record inserted")
                                     
                                     # Insert health issues if provided
-                                    if health_desc or prescription or guardian:
+                                    if health_desc or prescription or guardian_contact:
                                         cursor.execute(
                                             "INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
                                             (sid, health_desc if health_desc else None, 
                                              prescription if prescription else None, 
-                                             guardian if guardian else None)
+                                             guardian_contact)
                                         )
-                                        st.success("✓ Health record inserted")
                                     
                                     update_room_occupancy(room_id)
                                     conn.commit()
                                     st.success(f"✅ Student {name} (ID: {sid}) added successfully!")
                                     st.balloons()
+                                    time.sleep(2)
                                     st.rerun()
                                     
                                 except mysql.connector.IntegrityError as err:
                                     conn.rollback()
-                                    st.error(f"❌ Integrity Error: {err}")
-                                    st.code(f"Full error details:\n{traceback.format_exc()}")
-                                    
-                                    # Show what might be causing the issue
-                                    st.markdown("### Troubleshooting:")
-                                    st.write("Check if any of these already exist:")
-                                    results = check_all_tables_for_student_id(sid)
-                                    for table, records in results.items():
-                                        if records:
-                                            st.write(f"- {table}: Has records")
+                                    error_msg = str(err)
+                                    if "Duplicate entry" in error_msg:
+                                        if "contact" in error_msg:
+                                            st.error("❌ This contact number is already registered!")
                                         else:
-                                            st.write(f"- {table}: No records")
-                                    
+                                            st.error("❌ Student ID already exists!")
+                                    else:
+                                        st.error(f"❌ Database error: {err}")
+                                        
                                 except mysql.connector.Error as err:
                                     conn.rollback()
-                                    st.error(f"❌ Database Error: {err}")
-                                    st.code(traceback.format_exc())
+                                    st.error(f"❌ Database error: {err}")
+
+    # ---------------------- PENALTY ----------------------
+    elif table_choice == "penalty":
+        st.markdown("### ✏️ Update Penalty Points")
+        pid = st.number_input("Student ID", step=1, min_value=1, key="penalty_sid")
+
+        if st.button("Search Penalty Record"):
+            try:
+                cursor.execute("SELECT * FROM penalty WHERE student_id = %s", (pid,))
+                penalty = cursor.fetchone()
+
+                if penalty:
+                    st.success(f"Found penalty record for Student ID: {pid}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Total Points", penalty["total_points"])
+                    with col2:
+                        st.metric("Last Updated", penalty["last_updated"])
+                    
+                    points = st.number_input("New Points", value=penalty["total_points"], step=1, min_value=0)
+                    if st.button("Update Penalty", type="primary"):
+                        cursor.execute(
+                            "UPDATE penalty SET total_points = %s, last_updated = %s WHERE student_id = %s",
+                            (points, now, pid)
+                        )
+                        conn.commit()
+                        st.success("✅ Penalty points updated successfully!")
+                        st.rerun()
                 else:
-                    st.error("❌ No rooms with available space!")
+                    st.warning(f"⚠️ No penalty record found for Student ID: {pid}")
+            except mysql.connector.Error as err:
+                st.error(f"Error searching penalty: {err}")
+
+    # ---------------------- MAINTENANCE REQUEST ----------------------
+    elif table_choice == "maintenancerequest":
+        st.markdown("### ➕ Add Maintenance Request")
+        
+        rid = st.number_input("Request ID", step=1, min_value=1)
+        room_id = st.number_input("Room ID", step=1, min_value=1)
+        desc = st.text_area("Description")
+        stat = st.selectbox("Status", ['Pending', 'In Progress', 'Resolved'])
+
+        if st.button("Add Request", type="primary"):
+            if not rid:
+                st.error("❌ Request ID is required")
+            elif not room_id:
+                st.error("❌ Room ID is required")
+            elif not desc:
+                st.error("❌ Description is required")
             else:
-                st.error("❌ No rooms found!")
+                try:
+                    cursor.execute(
+                        "INSERT INTO maintenancerequest (id, room_id, description, statues) VALUES (%s, %s, %s, %s)",
+                        (rid, room_id, desc, stat)
+                    )
+                    conn.commit()
+                    st.success("✅ Maintenance request added successfully!")
+                    st.rerun()
+                except mysql.connector.IntegrityError as err:
+                    conn.rollback()
+                    if "Duplicate entry" in str(err):
+                        st.error(f"❌ Request ID {rid} already exists!")
+                    elif "foreign key" in str(err):
+                        st.error(f"❌ Room ID {room_id} does not exist!")
+                    else:
+                        st.error(f"❌ Database error: {err}")
+                except mysql.connector.Error as err:
+                    conn.rollback()
+                    st.error(f"❌ Error adding request: {err}")
+
+    # ---------------------- ROOM TABLE ----------------------
+    elif table_choice == "room":
+        st.markdown("### ➕ Add New Room")
+        with st.expander("➕ Add Room"):
+            room_id = st.number_input("Room ID", step=1, min_value=1)
+            floor = st.number_input("Floor", step=1, min_value=1)
+            building_id = st.number_input("Building ID", step=1, min_value=1)
+            capacity = st.number_input("Capacity", step=1, min_value=1)
+            
+            if st.button("Add Room"):
+                try:
+                    cursor.execute(
+                        "INSERT INTO room (id, floor, building_id, capacity, current_occupancy) VALUES (%s, %s, %s, %s, %s)",
+                        (room_id, floor, building_id, capacity, 0)
+                    )
+                    conn.commit()
+                    st.success("✅ Room added successfully!")
+                    st.rerun()
+                except mysql.connector.IntegrityError as err:
+                    if "Duplicate entry" in str(err):
+                        st.error(f"❌ Room ID {room_id} already exists!")
+                    elif "foreign key" in str(err):
+                        st.error(f"❌ Building ID {building_id} does not exist!")
+                    else:
+                        st.error(f"❌ Error: {err}")
+
+    # ---------------------- BUILDING TABLE ----------------------
+    elif table_choice == "building":
+        st.markdown("### ➕ Add New Building")
+        with st.expander("➕ Add Building"):
+            building_id = st.number_input("Building ID", step=1, min_value=1)
+            building_name = st.text_input("Building Name")
+            
+            if st.button("Add Building"):
+                try:
+                    cursor.execute(
+                        "INSERT INTO building (id, building_name) VALUES (%s, %s)",
+                        (building_id, building_name)
+                    )
+                    conn.commit()
+                    st.success("✅ Building added successfully!")
+                    st.rerun()
+                except mysql.connector.IntegrityError as err:
+                    if "Duplicate entry" in str(err):
+                        st.error(f"❌ Building ID {building_id} already exists!")
+                    else:
+                        st.error(f"❌ Error: {err}")
 
 cursor.close()
 conn.close()
