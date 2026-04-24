@@ -77,7 +77,6 @@ table_options = list(TABLE_NAMES.values())
 selected_display = st.selectbox(
     "Select Table to View", 
     table_options,
-    index = None,
     placeholder = "Choose a table...",
     key="table_selector"
     
