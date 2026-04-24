@@ -54,26 +54,14 @@ def get_available_rooms():
 egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
-# ---------------------- Table Choice ----------------------
 
-# Get real tables from DB instead of hardcoding SELECT
-cursor.execute("SHOW TABLES")
-db_tables = [list(t.values())[0] for t in cursor.fetchall()]
+# ---------------------- Table Choice ---------------------- 
+all_tables = ["Select"] + VALID_TABLES 
+table_choice = st.selectbox("Select Table to View", all_tables)
 
-# Format for UI (capitalize first letter only)
-display_tables = [t.capitalize() for t in db_tables]
-
-# Mapping back (IMPORTANT for SQL queries)
-table_map = dict(zip(display_tables, db_tables))
-
-table_choice = st.selectbox("Select Table to View", display_tables)
-
-if table_choice:
-    actual_table = table_map[table_choice]
-
-    st.subheader(f"{table_choice} Table")
-    st.dataframe(load_table(actual_table))
-
+ if table_choice != "Select": 
+st.subheader(f"{table_choice} Table") 
+st.dataframe(load_table(table_choice))
 # ---------------------- STUDENT TABLE ----------------------
 if table_choice == "student":
     st.markdown("### 🔥 Delete Student")
