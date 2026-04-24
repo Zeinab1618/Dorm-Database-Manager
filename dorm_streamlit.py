@@ -35,7 +35,7 @@ VALID_TABLES = [
 # Create formatted table names with proper display names
 FORMATTED_TABLES = [
     "Student",
-    "Penalty",
+    "Penalty", 
     "Maintenancerequest",
     "Meals", 
     "Room",
@@ -44,14 +44,26 @@ FORMATTED_TABLES = [
 ]
 
 # Create mapping between formatted names and original names
-TABLE_MAPPING = dict(zip(FORMATTED_TABLES, VALID_TABLES))
+TABLE_MAPPING = {
+    "Student": "student",
+    "Penalty": "penalty",
+    "Maintenancerequest": "maintenancerequest",
+    "Meals": "meals",
+    "Room": "room",
+    "Building": "building",
+    "Health issues": "health_issues"
+}
 
 def load_table(table_name):
     if table_name not in VALID_TABLES:
         return pd.DataFrame()
     try:
         cursor.execute(f"SELECT * FROM {table_name}")
-        return pd.DataFrame(cursor.fetchall())
+        data = cursor.fetchall()
+        if data:
+            return pd.DataFrame(data)
+        else:
+            return pd.DataFrame()
     except mysql.connector.Error as err:
         st.error(f"Error loading table: {err}")
         return pd.DataFrame()
@@ -78,10 +90,10 @@ egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
 # ---------------------- Table Choice ---------------------- 
-table_options = FORMATTED_TABLES
+# Display dropdown with all options
 table_choice_formatted = st.selectbox(
     "Select Table to View", 
-    table_options,
+    FORMATTED_TABLES,
     index=None,
     placeholder="Choose a table..."
 )
@@ -91,8 +103,14 @@ if table_choice_formatted:
     table_choice = TABLE_MAPPING[table_choice_formatted]
     st.session_state['selected_table'] = table_choice
     
-    st.subheader(f"{table_choice_formatted} Table") 
-    st.dataframe(load_table(table_choice))
+    # Display table data
+    df = load_table(table_choice)
+    if not df.empty:
+        st.subheader(f"{table_choice_formatted} Table") 
+        st.dataframe(df)
+    else:
+        st.subheader(f"{table_choice_formatted} Table") 
+        st.info("No data found in this table")
     
     # ---------------------- STUDENT TABLE ----------------------
     if table_choice == "student":
@@ -395,6 +413,17 @@ if table_choice_formatted:
         st.markdown("### 🏥 Health Issues Records")
         st.info("Health issues table shows student medical information")
         
+        # Display existing health records
+        cursor.execute("""
+            SELECT h.*, s.student_Name 
+            FROM health_issues h 
+            JOIN student s ON h.student_id = s.id
+        """)
+        health_records = cursor.fetchall()
+        if health_records:
+            st.subheader("Current Health Records")
+            st.dataframe(pd.DataFrame(health_records))
+        
         # Option to add/update health issues
         with st.expander("➕ Add/Update Health Issues"):
             student_id = st.number_input("Student ID", step=1, min_value=1, key="health_student_id")
@@ -406,13 +435,18 @@ if table_choice_formatted:
                     cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (student_id,))
                     existing = cursor.fetchone()
                     
+                    # Get student name
+                    cursor.execute("SELECT student_Name FROM student WHERE id = %s", (student_id,))
+                    student = cursor.fetchone()
+                    st.info(f"Student: {student['student_Name']}")
+                    
                     if existing:
-                        st.info(f"Updating existing health record for Student ID: {student_id}")
-                        default_desc = existing['description'] or ""
-                        default_prescription = existing['prescription'] or ""
+                        st.info(f"Updating existing health record")
+                        default_desc = existing['description'] if existing['description'] else ""
+                        default_prescription = existing['prescription'] if existing['prescription'] else ""
                         default_guardian = existing['guardian_contact']
                     else:
-                        st.info(f"Adding new health record for Student ID: {student_id}")
+                        st.info(f"Adding new health record")
                         default_desc = ""
                         default_prescription = ""
                         default_guardian = ""
@@ -421,7 +455,7 @@ if table_choice_formatted:
                     prescription = st.text_input("Prescription", value=default_prescription)
                     guardian_contact = st.text_input("Guardian Contact (11 digits)", value=default_guardian, max_chars=11)
                     
-                    if st.button("Save Health Record"):
+                    if st.button("Save Health Record", key="save_health"):
                         if not guardian_contact:
                             st.error("❌ Guardian Contact is required!")
                         elif len(guardian_contact) != 11:
@@ -448,6 +482,7 @@ if table_choice_formatted:
                                     )
                                 conn.commit()
                                 st.success("✅ Health record saved successfully!")
+                                time.sleep(1)
                                 st.rerun()
                             except mysql.connector.Error as err:
                                 conn.rollback()
