@@ -78,6 +78,14 @@ selected_table_display = st.selectbox(
     key="table_selector"
 )
 
+# FORCE UI REFRESH FIX (PUT IT RIGHT HERE)
+if "last_table" not in st.session_state:
+    st.session_state.last_table = None
+
+if selected_table_display != st.session_state.last_table:
+    st.session_state.last_table = selected_table_display
+    st.rerun()
+
 # Only show content if a table is selected
 if selected_table_display:
     # Get the actual table name from display name
