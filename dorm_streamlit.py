@@ -78,7 +78,7 @@ selected_display = st.selectbox(
     "Select Table to View", 
     ["Choose a table..."] + table_options,
     key="table_selector",
-    index=None 
+    index=0
 )
 
 # Update current table based on selection
