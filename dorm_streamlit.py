@@ -18,30 +18,6 @@ cursor = conn.cursor(dictionary=True)
 
 st.title("🏢 Dormitory Database Management System")
 
-# Add custom CSS to fix cursor on dropdown
-st.markdown("""
-    <style>
-    /* Make the selectbox dropdown arrow show pointer cursor */
-    .stSelectbox [data-baseweb="select"] {
-        cursor: pointer;
-    }
-    .stSelectbox [data-baseweb="select"] * {
-        cursor: pointer;
-    }
-    /* For the dropdown arrow specifically */
-    .stSelectbox svg {
-        cursor: pointer;
-    }
-    /* For the entire selectbox container */
-    div[data-testid="stSelectbox"] {
-        cursor: pointer;
-    }
-    div[data-testid="stSelectbox"] * {
-        cursor: pointer;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Initialize session state
 if 'current_table' not in st.session_state:
     st.session_state.current_table = None
@@ -97,17 +73,16 @@ now = datetime.now(egypt)
 # Create list of options for dropdown
 table_options = list(TABLE_NAMES.values())
 
-# Use index=None to make it a true placeholder (not selectable)
+# Simple selectbox without any rerun tricks
 selected_display = st.selectbox(
     "Select Table to View", 
-    table_options,
-    index=None,
-    placeholder="Choose a table...",
-    key="table_selector"
+    ["Choose a table..."] + table_options,
+    key="table_selector",
+    index=None 
 )
 
 # Update current table based on selection
-if selected_display:
+if selected_display != "Choose a table...":
     for table_key, table_display in TABLE_NAMES.items():
         if table_display == selected_display:
             st.session_state.current_table = table_key
