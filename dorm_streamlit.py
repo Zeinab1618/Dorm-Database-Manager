@@ -314,6 +314,34 @@ if table_choice_formatted:
                     conn.rollback()
                     st.error(f"❌ Error adding request: {err}")
 
+    # ---------------------- MEALS ----------------------
+    elif table_choice == "meals":
+        st.markdown("### 📝 View Meals")
+        st.info("Meals table shows student meal preferences")
+        
+        # Option to add meal preference
+        with st.expander("➕ Add Meal Preference"):
+            student_id = st.number_input("Student ID", step=1, min_value=1, key="meal_student_id")
+            meal_type = st.selectbox("Meal Type", ["A", "B"], key="meal_type")
+            weekday = st.selectbox("Weekday", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="meal_weekday")
+            
+            if st.button("Add Meal Preference"):
+                if not student_exists(student_id):
+                    st.error(f"❌ Student ID {student_id} does not exist!")
+                else:
+                    try:
+                        cursor.execute(
+                            "INSERT INTO meals (student_id, meal_type, weekday) VALUES (%s, %s, %s)",
+                            (student_id, meal_type, weekday)
+                        )
+                        conn.commit()
+                        st.success("✅ Meal preference added successfully!")
+                        st.rerun()
+                    except mysql.connector.IntegrityError:
+                        st.error("❌ This student already has a meal preference for this weekday!")
+                    except mysql.connector.Error as err:
+                        st.error(f"❌ Error: {err}")
+
     # ---------------------- ROOM TABLE ----------------------
     elif table_choice == "room":
         st.markdown("### ➕ Add New Room")
@@ -361,6 +389,71 @@ if table_choice_formatted:
                         st.error(f"❌ Building ID {building_id} already exists!")
                     else:
                         st.error(f"❌ Error: {err}")
+
+    # ---------------------- HEALTH ISSUES ----------------------
+    elif table_choice == "health_issues":
+        st.markdown("### 🏥 Health Issues Records")
+        st.info("Health issues table shows student medical information")
+        
+        # Option to add/update health issues
+        with st.expander("➕ Add/Update Health Issues"):
+            student_id = st.number_input("Student ID", step=1, min_value=1, key="health_student_id")
+            
+            if student_id:
+                # Check if student exists
+                if student_exists(student_id):
+                    # Fetch existing health issues if any
+                    cursor.execute("SELECT * FROM health_issues WHERE student_id = %s", (student_id,))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        st.info(f"Updating existing health record for Student ID: {student_id}")
+                        default_desc = existing['description'] or ""
+                        default_prescription = existing['prescription'] or ""
+                        default_guardian = existing['guardian_contact']
+                    else:
+                        st.info(f"Adding new health record for Student ID: {student_id}")
+                        default_desc = ""
+                        default_prescription = ""
+                        default_guardian = ""
+                    
+                    health_desc = st.text_area("Health Description", value=default_desc)
+                    prescription = st.text_input("Prescription", value=default_prescription)
+                    guardian_contact = st.text_input("Guardian Contact (11 digits)", value=default_guardian, max_chars=11)
+                    
+                    if st.button("Save Health Record"):
+                        if not guardian_contact:
+                            st.error("❌ Guardian Contact is required!")
+                        elif len(guardian_contact) != 11:
+                            st.error("❌ Guardian contact must be exactly 11 digits!")
+                        else:
+                            try:
+                                if existing:
+                                    # Update existing record
+                                    cursor.execute(
+                                        "UPDATE health_issues SET description = %s, prescription = %s, guardian_contact = %s WHERE student_id = %s",
+                                        (health_desc if health_desc else None, 
+                                         prescription if prescription else None, 
+                                         guardian_contact, 
+                                         student_id)
+                                    )
+                                else:
+                                    # Insert new record
+                                    cursor.execute(
+                                        "INSERT INTO health_issues (student_id, description, prescription, guardian_contact) VALUES (%s, %s, %s, %s)",
+                                        (student_id, 
+                                         health_desc if health_desc else None, 
+                                         prescription if prescription else None, 
+                                         guardian_contact)
+                                    )
+                                conn.commit()
+                                st.success("✅ Health record saved successfully!")
+                                st.rerun()
+                            except mysql.connector.Error as err:
+                                conn.rollback()
+                                st.error(f"❌ Error saving health record: {err}")
+                else:
+                    st.error(f"❌ Student ID {student_id} does not exist!")
 
 cursor.close()
 conn.close()
