@@ -31,6 +31,11 @@ VALID_TABLES = [
     "health_issues"
 ]
 
+# Create formatted table names with capital first letter
+FORMATTED_TABLES = [table.capitalize() for table in VALID_TABLES]
+# Create mapping between formatted names and original names
+TABLE_MAPPING = dict(zip(FORMATTED_TABLES, VALID_TABLES))
+
 def load_table(table_name):
     if table_name not in VALID_TABLES:
         return pd.DataFrame()
@@ -56,12 +61,15 @@ now = datetime.now(egypt)
 
 
 # ---------------------- Table Choice ---------------------- 
-all_tables = ["Select"] + VALID_TABLES 
-table_choice = st.selectbox("Select Table to View", all_tables)
+# Remove "Select" option - start directly with table list
+table_choice_formatted = st.selectbox("Select Table to View", FORMATTED_TABLES)
 
-if table_choice != "Select": 
-    st.subheader(f"{table_choice} Table") 
-    st.dataframe(load_table(table_choice))
+# Convert formatted name back to original table name
+table_choice = TABLE_MAPPING[table_choice_formatted]
+
+st.subheader(f"{table_choice_formatted} Table") 
+st.dataframe(load_table(table_choice))
+
 # ---------------------- STUDENT TABLE ----------------------
 if table_choice == "student":
     st.markdown("### 🔥 Delete Student")
