@@ -59,7 +59,7 @@ now = datetime.now(egypt)
 all_tables = ["Select"] + VALID_TABLES 
 table_choice = st.selectbox("Select Table to View", all_tables)
 
- if table_choice != "Select": 
+if table_choice != "Select": 
 st.subheader(f"{table_choice} Table") 
 st.dataframe(load_table(table_choice))
 # ---------------------- STUDENT TABLE ----------------------
