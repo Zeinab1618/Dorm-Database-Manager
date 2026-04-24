@@ -19,6 +19,8 @@ st.title("🏢 Dormitory Database Management System")
 
 if 'search_id' not in st.session_state:
     st.session_state['search_id'] = None
+if 'selected_table' not in st.session_state:
+    st.session_state['selected_table'] = None
 
 # ---------------------- Utilities ----------------------
 VALID_TABLES = [
@@ -39,7 +41,7 @@ FORMATTED_TABLES = [
     "Meals", 
     "Room",
     "Building",
-    "Health issues"  # Changed from Health_issues to "Health issues"
+    "Health issues"
 ]
 
 # Create mapping between formatted names and original names
@@ -69,14 +71,20 @@ egypt = timezone("Africa/Cairo")
 now = datetime.now(egypt)
 
 # ---------------------- Table Choice ---------------------- 
-# Add placeholder for initial selection
-table_options = ["-- Select a table --"] + FORMATTED_TABLES
-table_choice_formatted = st.selectbox("Select Table to View", table_options)
+# Use index to set placeholder
+table_options = FORMATTED_TABLES
+table_choice_formatted = st.selectbox(
+    "Select Table to View", 
+    table_options,
+    index=None,
+    placeholder="Choose a table..."
+)
 
-# Only show table data if a valid table is selected (not the placeholder)
-if table_choice_formatted != "-- Select a table --":
+# Only show table data if a valid table is selected
+if table_choice_formatted:
     # Convert formatted name back to original table name
     table_choice = TABLE_MAPPING[table_choice_formatted]
+    st.session_state['selected_table'] = table_choice
     
     st.subheader(f"{table_choice_formatted} Table") 
     st.dataframe(load_table(table_choice))
